@@ -7,15 +7,20 @@ import com.fs.starfarer.api.ui.UIPanelAPI
 import hullmodsrenewed.RefitPickerInjector.Companion.findDescendant
 import hullmodsrenewed.RefitPickerInjector.Companion.hasMethod
 import org.lwjgl.input.Keyboard
+import org.lwjgl.opengl.GL11
 import hullmodsrenewed.uiframework.CustomPanel
 import hullmodsrenewed.uiframework.ReflectionUtils.invoke
+import hullmodsrenewed.uiframework.Text
+import hullmodsrenewed.uiframework.anchorInTopMiddleOfParent
 import hullmodsrenewed.uiframework.bottom
+import hullmodsrenewed.uiframework.drawBorder
 import hullmodsrenewed.uiframework.height
 import hullmodsrenewed.uiframework.left
 import hullmodsrenewed.uiframework.playSound
 import hullmodsrenewed.uiframework.right
 import hullmodsrenewed.uiframework.top
 import hullmodsrenewed.uiframework.width
+import hullmodsrenewed.uiframework.xAlignOffset
 
 /**
  * Operates on an open hull-mod picker (`ModPickerDialogV3`):
@@ -38,7 +43,9 @@ object PickerController {
     fun process(picker: UIPanelAPI) {
         if (picker !== injectedPicker) {
             injectedPicker = picker
+            RefitDebug.dumpTree(picker, "ModPickerDialogV3")
             injectMarkingOverlay(picker)
+            injectLeftPanel(picker)
         }
         applyFilter(picker)
     }
@@ -102,6 +109,25 @@ object PickerController {
             }
         }
         overlay.position.inTL(0f, 0f)
+    }
+
+    // --- Left filter column (WIP: first-cut placement, to be tuned from screenshots) -----------
+
+    private fun injectLeftPanel(picker: UIPanelAPI) {
+        val panelWidth = 160f
+        picker.CustomPanel(panelWidth, picker.height) { plugin ->
+            plugin.renderBelow { alpha ->
+                GL11.glColor4f(0f, 0f, 0f, 0.55f * alpha)
+                GL11.glRectf(plugin.left, plugin.bottom, plugin.right, plugin.top)
+                GL11.glColor4f(0.5f, 0.8f, 1f, alpha)
+                drawBorder(plugin.left, plugin.top, plugin.right, plugin.bottom)
+            }
+            Text("Filters (WIP)") { anchorInTopMiddleOfParent(10f) }
+        }.apply {
+            // Sit just left of the picker dialog, in the (free) ship-selector space.
+            position.inTL(0f, 0f)
+            xAlignOffset = -(panelWidth + 8f)
+        }
     }
 
     private fun hitTest(row: Any, x: Float, y: Float): Boolean {

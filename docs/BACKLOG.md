@@ -38,3 +38,11 @@ switch to flip it per-session.
 - UI: a small toggle (area checkbox) injected alongside the future search bar / Favourites tab.
 
 **Slot:** fold into **M3** (filtering features) since it shares the filter pipeline.
+
+---
+
+## Rebindable mark modifiers  *(requested 2026-06-21)*
+
+Currently the mark gestures are fixed: **Ctrl+click = blacklist**, **Shift+click = favourite**.
+Make these modifier keys rebindable (via LunaLib settings, alongside the filter hold-keybinds).
+Lower priority than the filter UI, but wanted eventually.
