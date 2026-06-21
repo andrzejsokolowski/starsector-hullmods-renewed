@@ -25,7 +25,9 @@ Early scaffolding. The design is being planned — see [`docs/RESEARCH.md`](docs
   runtime on Starsector's shared classloader, so this mod ships **no** Kotlin stdlib of its own).
 - **UI approach:** runtime reflection into the refit screen, following the technique from
   Refit Filters by Starficz. Its `UIFramework` (LGPL-3.0) is vendored under
-  `src/org/starficz/UIFramework`.
+  `src/hullmodsrenewed/uiframework` — deliberately relocated out of `org.starficz.*` so this
+  mod never collides with Refit Filters (or any other Starficz-framework mod) on Starsector's
+  shared classloader.
 
 ## Building
 
@@ -35,5 +37,6 @@ Early scaffolding. The design is being planned — see [`docs/RESEARCH.md`](docs
 
 ## Credits & licensing
 
-- `src/org/starficz/UIFramework/**` — © Starficz, **LGPL-3.0-only** (vendored, see header).
+- `src/hullmodsrenewed/uiframework/**` — © Starficz, **LGPL-3.0-only** (vendored from Refit
+  Filters; package relocated, per-file headers retained).
 - Everything else — see `LICENSE`.

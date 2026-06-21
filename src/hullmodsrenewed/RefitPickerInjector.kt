@@ -7,9 +7,9 @@ import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.campaign.CampaignState
 import com.fs.state.AppDriver
-import org.starficz.UIFramework.ReflectionUtils.getMethodsMatching
-import org.starficz.UIFramework.ReflectionUtils.invoke
-import org.starficz.UIFramework.getChildrenCopy
+import hullmodsrenewed.uiframework.ReflectionUtils.getMethodsMatching
+import hullmodsrenewed.uiframework.ReflectionUtils.invoke
+import hullmodsrenewed.uiframework.getChildrenCopy
 
 /**
  * Watches the campaign refit screen and, when the hull-mod picker (`ModPickerDialogV3`) is open,

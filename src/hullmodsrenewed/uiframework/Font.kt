@@ -1,4 +1,4 @@
-package org.starficz.UIFramework
+package hullmodsrenewed.uiframework
 
 // Vendored from Refit Filters by Starficz. Copyright Starficz, Licensed under LGPL-3.0-only.
 // https://www.gnu.org/licenses/lgpl-3.0.html

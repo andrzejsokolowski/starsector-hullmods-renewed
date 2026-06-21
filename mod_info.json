@@ -1,7 +1,7 @@
 {
   "id": "hullmods_renewed",
   "name": "Hullmods - Renewed",
-  "author": "Andrzej Sokolowski",
+  "author": "Oddisz",
   "utility": "true",
   "version": "0.1.0",
   "description": "Overhauls the refit hull mod picker. Blacklist hull mods to hide them, mark favourites for a dedicated tab, and define templates that install a whole group of hull mods in one click. Works with vanilla and modded hull mods.",

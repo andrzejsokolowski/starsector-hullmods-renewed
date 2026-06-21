@@ -7,15 +7,15 @@ import com.fs.starfarer.api.ui.UIPanelAPI
 import hullmodsrenewed.RefitPickerInjector.Companion.findDescendant
 import hullmodsrenewed.RefitPickerInjector.Companion.hasMethod
 import org.lwjgl.input.Keyboard
-import org.starficz.UIFramework.CustomPanel
-import org.starficz.UIFramework.ReflectionUtils.invoke
-import org.starficz.UIFramework.bottom
-import org.starficz.UIFramework.height
-import org.starficz.UIFramework.left
-import org.starficz.UIFramework.playSound
-import org.starficz.UIFramework.right
-import org.starficz.UIFramework.top
-import org.starficz.UIFramework.width
+import hullmodsrenewed.uiframework.CustomPanel
+import hullmodsrenewed.uiframework.ReflectionUtils.invoke
+import hullmodsrenewed.uiframework.bottom
+import hullmodsrenewed.uiframework.height
+import hullmodsrenewed.uiframework.left
+import hullmodsrenewed.uiframework.playSound
+import hullmodsrenewed.uiframework.right
+import hullmodsrenewed.uiframework.top
+import hullmodsrenewed.uiframework.width
 
 /**
  * Operates on an open hull-mod picker (`ModPickerDialogV3`):
