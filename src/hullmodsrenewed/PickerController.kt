@@ -40,8 +40,9 @@ object PickerController {
 
     private var injectedPicker: UIPanelAPI? = null
     private var lastSignature = ""
+    private var lastShip: Any? = null
 
-    /** Per-picker cache of "is this hull-mod applicable to the current ship" (id -> applicable). */
+    /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
 
     fun process(picker: UIPanelAPI) {
@@ -68,17 +69,23 @@ object PickerController {
             Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU)
         val applicableOnly = FilterState.applicableOnly
 
+        // Resolve the ship up front; if it changed (switched hull), drop the applicability cache.
+        val ship = if (applicableOnly) resolveShip(picker) else null
+        if (ship !== lastShip) {
+            applicableCache.clear()
+            lastShip = ship
+        }
+
         val blacklist = HullmodPrefs.blacklist()
         val favourites = HullmodPrefs.favourites()
 
         // When the effective filter changes, rebuild the table first so loosening brings rows back.
-        val signature = "$favOnly|$showBlacklisted|$applicableOnly|${blacklist.size}|${favourites.size}"
+        val signature = "$favOnly|$showBlacklisted|$applicableOnly|${blacklist.size}|" +
+            "${favourites.size}|${System.identityHashCode(ship)}"
         if (signature != lastSignature) {
             runCatching { picker.invoke("updateTable") }
             lastSignature = signature
         }
-
-        val ship = if (applicableOnly) resolveShip(picker) else null
 
         val rows = table.invoke("getRows") as? List<*> ?: return
         val toRemove = rows.filter { row ->
