@@ -2,6 +2,7 @@ package hullmodsrenewed
 
 import com.fs.starfarer.api.loading.HullModSpecAPI
 import com.fs.starfarer.api.ui.CustomPanelAPI
+import com.fs.starfarer.api.ui.TextFieldAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.api.util.Misc
@@ -11,8 +12,10 @@ import org.lwjgl.input.Keyboard
 import org.lwjgl.opengl.GL11
 import hullmodsrenewed.uiframework.AreaCheckbox
 import hullmodsrenewed.uiframework.CustomPanel
+import hullmodsrenewed.uiframework.Font
 import hullmodsrenewed.uiframework.ReflectionUtils.invoke
 import hullmodsrenewed.uiframework.Text
+import hullmodsrenewed.uiframework.TextField
 import hullmodsrenewed.uiframework.anchorInTopMiddleOfParent
 import hullmodsrenewed.uiframework.bottom
 import hullmodsrenewed.uiframework.drawBorder
@@ -41,6 +44,7 @@ object PickerController {
     private var injectedPicker: UIPanelAPI? = null
     private var lastSignature = ""
     private var lastShip: Any? = null
+    private var searchField: TextFieldAPI? = null
 
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
@@ -50,6 +54,8 @@ object PickerController {
             injectedPicker = picker
             lastSignature = ""
             applicableCache.clear()
+            searchField = null
+            FilterState.searchText = ""   // fresh search each time the picker opens
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
             injectMarkingOverlay(picker)
             injectLeftPanel(picker)
@@ -76,11 +82,14 @@ object PickerController {
             lastShip = ship
         }
 
+        searchField?.let { FilterState.searchText = it.text?.trim() ?: "" }
+        val query = FilterState.searchText.lowercase()
+
         val blacklist = HullmodPrefs.blacklist()
         val favourites = HullmodPrefs.favourites()
 
         // When the effective filter changes, rebuild the table first so loosening brings rows back.
-        val signature = "$favOnly|$showBlacklisted|$applicableOnly|${blacklist.size}|" +
+        val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${blacklist.size}|" +
             "${favourites.size}|${System.identityHashCode(ship)}"
         if (signature != lastSignature) {
             runCatching { picker.invoke("updateTable") }
@@ -90,11 +99,13 @@ object PickerController {
         val rows = table.invoke("getRows") as? List<*> ?: return
         val toRemove = rows.filter { row ->
             val data = runCatching { row?.invoke("getData") }.getOrNull() ?: return@filter false
-            val id = (data as? HullModSpecAPI)?.id ?: return@filter false
+            val spec = data as? HullModSpecAPI ?: return@filter false
+            val id = spec.id
             when {
                 !showBlacklisted && id in blacklist -> true
                 favOnly && id !in favourites -> true
                 applicableOnly && ship != null && !isApplicableToShip(picker, ship, data, id) -> true
+                query.isNotEmpty() && !matchesSearch(spec, query) -> true
                 else -> false
             }
         }
@@ -156,18 +167,24 @@ object PickerController {
             val bright = Misc.getBrightPlayerColor()
             val cbWidth = w - 28f
 
+            Text("Search (name / design type)") { position.inTL(14f, 40f) }
+            searchField = TextField(cbWidth, 28f, Font.VICTOR_14) {
+                position.inTL(14f, 60f)
+                text = FilterState.searchText
+            }
+
             AreaCheckbox("Favourites only", base, bg, bright, cbWidth, 30f, leftAlign = true) {
-                position.inTL(14f, 48f)
+                position.inTL(14f, 100f)
                 isChecked = FilterState.favouritesOnly
                 onClick { FilterState.favouritesOnly = isChecked }
             }
             AreaCheckbox("Show blacklisted", base, bg, bright, cbWidth, 30f, leftAlign = true) {
-                position.inTL(14f, 84f)
+                position.inTL(14f, 136f)
                 isChecked = FilterState.showBlacklisted
                 onClick { FilterState.showBlacklisted = isChecked }
             }
             AreaCheckbox("Applicable only", base, bg, bright, cbWidth, 30f, leftAlign = true) {
-                position.inTL(14f, 120f)
+                position.inTL(14f, 172f)
                 isChecked = FilterState.applicableOnly
                 onClick { FilterState.applicableOnly = isChecked }
             }
@@ -200,6 +217,13 @@ object PickerController {
         applicableCache.getOrPut(id) {
             runCatching { picker.invoke("isApplicable", data, ship) as? Boolean }.getOrNull() ?: true
         }
+
+    /** Case-insensitive substring match on the hull-mod name and its design type (manufacturer). */
+    private fun matchesSearch(spec: HullModSpecAPI, queryLower: String): Boolean {
+        val name = spec.displayName?.lowercase() ?: ""
+        val manufacturer = spec.manufacturer?.lowercase() ?: ""
+        return name.contains(queryLower) || manufacturer.contains(queryLower)
+    }
 
     private fun Any.specOrNull(): HullModSpecAPI? = runCatching { invoke("getData") }.getOrNull() as? HullModSpecAPI
 }

@@ -13,5 +13,6 @@ object FilterState {
     var favouritesOnly = false
     var showBlacklisted = false
     var applicableOnly = true   // default ON: hide mods that can never go on this ship (e.g. carrier mod on a no-bay hull)
-    // facet selections (design type / type / OP range / search) land here next.
+    var searchText = ""         // fuzzy/substring filter on hull-mod name + design type
+    // facet selections (design type / type / OP range) land here next.
 }
