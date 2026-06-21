@@ -114,8 +114,14 @@ object PickerController {
     // --- Left filter column (WIP: first-cut placement, to be tuned from screenshots) -----------
 
     private fun injectLeftPanel(picker: UIPanelAPI) {
-        val panelWidth = 160f
-        picker.CustomPanel(panelWidth, picker.height) { plugin ->
+        // Fill the free zone from a small screen margin up to just left of the hull-mod list.
+        val tableComp = findTable(picker) as? UIComponentAPI ?: return
+        val screenMargin = 20f
+        val gap = 10f
+        val panelLeftScreen = screenMargin
+        val w = (tableComp.left - gap - panelLeftScreen).coerceAtLeast(140f)
+
+        picker.CustomPanel(w, picker.height) { plugin ->
             plugin.renderBelow { alpha ->
                 GL11.glColor4f(0f, 0f, 0f, 0.55f * alpha)
                 GL11.glRectf(plugin.left, plugin.bottom, plugin.right, plugin.top)
@@ -124,9 +130,8 @@ object PickerController {
             }
             Text("Filters (WIP)") { anchorInTopMiddleOfParent(10f) }
         }.apply {
-            // Sit just left of the picker dialog, in the (free) ship-selector space.
             position.inTL(0f, 0f)
-            xAlignOffset = -(panelWidth + 8f)
+            xAlignOffset = panelLeftScreen - picker.left
         }
     }
 
