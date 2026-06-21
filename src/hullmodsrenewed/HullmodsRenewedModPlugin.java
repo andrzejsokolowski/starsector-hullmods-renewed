@@ -23,6 +23,7 @@ public class HullmodsRenewedModPlugin extends BaseModPlugin {
 
     @Override
     public void onGameLoad(boolean newGame) {
-        // TODO: register the refit-screen UI injection script here.
+        // Transient: not saved with the campaign, so it's re-added cleanly on every load.
+        Global.getSector().addTransientScript(new RefitPickerInjector());
     }
 }
