@@ -13,6 +13,16 @@ object FilterState {
     var favouritesOnly = false
     var showBlacklisted = false
     var applicableOnly = true   // default ON: hide mods that can never go on this ship (e.g. carrier mod on a no-bay hull)
-    var searchText = ""         // fuzzy/substring filter on hull-mod name + design type
-    // facet selections (design type / type / OP range) land here next.
+    var searchText = ""         // substring filter on hull-mod name + design type
+
+    // Multi-select facets. Empty set = no filter for that group. Within a group: OR. Across groups: AND.
+    val selectedDesignTypes: MutableSet<String> = mutableSetOf()   // by manufacturer
+    val selectedTypes: MutableSet<String> = mutableSetOf()         // by uiTag
+    // OP range slider lands here next.
+
+    fun clearTransient() {
+        searchText = ""
+        selectedDesignTypes.clear()
+        selectedTypes.clear()
+    }
 }

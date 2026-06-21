@@ -3,9 +3,11 @@ package hullmodsrenewed
 import com.fs.starfarer.api.loading.HullModSpecAPI
 import com.fs.starfarer.api.ui.CustomPanelAPI
 import com.fs.starfarer.api.ui.TextFieldAPI
+import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
 import com.fs.starfarer.api.ui.UIPanelAPI
 import com.fs.starfarer.api.util.Misc
+import java.awt.Color
 import hullmodsrenewed.RefitPickerInjector.Companion.findDescendant
 import hullmodsrenewed.RefitPickerInjector.Companion.hasMethod
 import org.lwjgl.input.Keyboard
@@ -16,6 +18,7 @@ import hullmodsrenewed.uiframework.Font
 import hullmodsrenewed.uiframework.ReflectionUtils.invoke
 import hullmodsrenewed.uiframework.Text
 import hullmodsrenewed.uiframework.TextField
+import hullmodsrenewed.uiframework.TooltipMakerPanel
 import hullmodsrenewed.uiframework.anchorInTopMiddleOfParent
 import hullmodsrenewed.uiframework.bottom
 import hullmodsrenewed.uiframework.drawBorder
@@ -41,10 +44,16 @@ import hullmodsrenewed.uiframework.xAlignOffset
  */
 object PickerController {
 
+    private data class FacetModel(
+        val designTypes: List<Pair<String, Int>>,
+        val types: List<Pair<String, Int>>,
+    )
+
     private var injectedPicker: UIPanelAPI? = null
     private var lastSignature = ""
     private var lastShip: Any? = null
     private var searchField: TextFieldAPI? = null
+    private var facetModel = FacetModel(emptyList(), emptyList())
 
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
@@ -55,7 +64,8 @@ object PickerController {
             lastSignature = ""
             applicableCache.clear()
             searchField = null
-            FilterState.searchText = ""   // fresh search each time the picker opens
+            FilterState.clearTransient()   // fresh search + facet selection each time the picker opens
+            buildFacetModel(picker)
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
             injectMarkingOverlay(picker)
             injectLeftPanel(picker)
@@ -84,13 +94,15 @@ object PickerController {
 
         searchField?.let { FilterState.searchText = it.text?.trim() ?: "" }
         val query = FilterState.searchText.lowercase()
+        val selDesign = FilterState.selectedDesignTypes
+        val selType = FilterState.selectedTypes
 
         val blacklist = HullmodPrefs.blacklist()
         val favourites = HullmodPrefs.favourites()
 
         // When the effective filter changes, rebuild the table first so loosening brings rows back.
-        val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${blacklist.size}|" +
-            "${favourites.size}|${System.identityHashCode(ship)}"
+        val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
+            "${selType.sorted()}|${blacklist.size}|${favourites.size}|${System.identityHashCode(ship)}"
         if (signature != lastSignature) {
             runCatching { picker.invoke("updateTable") }
             lastSignature = signature
@@ -106,6 +118,8 @@ object PickerController {
                 favOnly && id !in favourites -> true
                 applicableOnly && ship != null && !isApplicableToShip(picker, ship, data, id) -> true
                 query.isNotEmpty() && !matchesSearch(spec, query) -> true
+                selDesign.isNotEmpty() && designTypeOf(spec) !in selDesign -> true
+                selType.isNotEmpty() && spec.uiTags.none { it in selType } -> true
                 else -> false
             }
         }
@@ -188,6 +202,17 @@ object PickerController {
                 isChecked = FilterState.applicableOnly
                 onClick { FilterState.applicableOnly = isChecked }
             }
+
+            // Multi-select facets (design type + type) in a scrollable region below the toggles.
+            val facetTop = 212f
+            val facetWidth = w - 16f
+            val facetHeight = (picker.height - facetTop - 12f).coerceAtLeast(120f)
+            TooltipMakerPanel(facetWidth, facetHeight, withScroller = true) {
+                facetSection(this, "DESIGN TYPE", facetModel.designTypes,
+                    FilterState.selectedDesignTypes, base, bg, bright, facetWidth - 24f)
+                facetSection(this, "TYPE", facetModel.types,
+                    FilterState.selectedTypes, base, bg, bright, facetWidth - 24f)
+            }.position.inTL(8f, facetTop)
         }.apply {
             position.inTL(0f, 0f)
             xAlignOffset = leftScreen - picker.left
@@ -223,6 +248,33 @@ object PickerController {
         val name = spec.displayName?.lowercase() ?: ""
         val manufacturer = spec.manufacturer?.lowercase() ?: ""
         return name.contains(queryLower) || manufacturer.contains(queryLower)
+    }
+
+    private fun designTypeOf(spec: HullModSpecAPI): String =
+        spec.manufacturer?.takeIf { it.isNotBlank() } ?: "Unknown"
+
+    /** Build the design-type + type facet lists with counts, over the applicable-to-this-ship set. */
+    private fun buildFacetModel(picker: UIPanelAPI) {
+        val rows = (findTable(picker)?.invoke("getRows") as? List<*>) ?: emptyList<Any?>()
+        val ship = resolveShip(picker)
+        val specs = rows.mapNotNull { runCatching { it?.invoke("getData") }.getOrNull() as? HullModSpecAPI }
+            .filter { ship == null || isApplicableToShip(picker, ship, it, it.id) }
+        val design = specs.groupingBy { designTypeOf(it) }.eachCount().toList().sortedBy { it.first.lowercase() }
+        val types = specs.flatMap { it.uiTags }.groupingBy { it }.eachCount().toList().sortedBy { it.first.lowercase() }
+        facetModel = FacetModel(design, types)
+    }
+
+    /** Renders one multi-select facet group into a (scrollable) tooltip-maker, auto-stacked. */
+    private fun facetSection(
+        tm: TooltipMakerAPI, title: String, entries: List<Pair<String, Int>>,
+        selected: MutableSet<String>, base: Color, bg: Color, bright: Color, rowWidth: Float,
+    ) {
+        tm.addPara(title, 10f)
+        for ((name, count) in entries) {
+            val cb = tm.addAreaCheckbox("$name ($count)", name, base, bg, bright, rowWidth, 22f, 2f)
+            cb.isChecked = name in selected
+            cb.onClick { if (cb.isChecked) selected.add(name) else selected.remove(name) }
+        }
     }
 
     private fun Any.specOrNull(): HullModSpecAPI? = runCatching { invoke("getData") }.getOrNull() as? HullModSpecAPI
