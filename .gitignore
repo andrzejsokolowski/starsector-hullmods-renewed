@@ -20,3 +20,6 @@ bin/
 # Built jar is committed on release tags only; ignore during normal dev to avoid churn.
 # (Comment the next line out if you prefer to commit jars/.)
 jars/
+
+# Packaged release archive (regenerated on each version cut)
+*.zip

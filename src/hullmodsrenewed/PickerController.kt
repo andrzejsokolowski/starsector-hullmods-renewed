@@ -116,10 +116,11 @@ object PickerController {
     private fun injectLeftPanel(picker: UIPanelAPI) {
         // Fill the free zone from a small screen margin up to just left of the hull-mod list.
         val tableComp = findTable(picker) as? UIComponentAPI ?: return
-        val screenMargin = 20f
         val gap = 10f
-        val panelLeftScreen = screenMargin
-        val w = (tableComp.left - gap - panelLeftScreen).coerceAtLeast(140f)
+        val rightScreen = tableComp.left - gap
+        // 75% of the full free width, anchored to the list side (don't run to the screen edge).
+        val w = ((rightScreen - 20f) * 0.75f).coerceAtLeast(140f)
+        val leftScreen = rightScreen - w
 
         picker.CustomPanel(w, picker.height) { plugin ->
             plugin.renderBelow { alpha ->
@@ -131,7 +132,7 @@ object PickerController {
             Text("Filters (WIP)") { anchorInTopMiddleOfParent(10f) }
         }.apply {
             position.inTL(0f, 0f)
-            xAlignOffset = panelLeftScreen - picker.left
+            xAlignOffset = leftScreen - picker.left
         }
     }
 
