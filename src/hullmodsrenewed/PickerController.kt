@@ -19,49 +19,57 @@ import hullmodsrenewed.uiframework.width
 
 /**
  * Operates on an open hull-mod picker (`ModPickerDialogV3`):
- *  - **Filter:** removes blacklisted hull-mod rows from the picker's `UITable` each frame
- *    (re-applied after the dialog rebuilds its table). Holding **Alt** reveals blacklisted rows
- *    so they can be un-blacklisted.
+ *  - **Filter:** removes rows from the picker's `UITable` each frame (re-applied after the dialog
+ *    rebuilds its table). Modes, via temporary keybinds until the real filter UI exists:
+ *      - default: hide blacklisted mods
+ *      - hold **Alt**: reveal everything (so blacklisted mods can be un-blacklisted)
+ *      - hold **`** (backtick/tilde): show **favourites only**
  *  - **Mark:** a transparent overlay over the picker turns **Ctrl+click** into "toggle blacklist"
  *    and **Shift+click** into "toggle favourite" on the row under the cursor, consuming the click
  *    so the vanilla dialog doesn't also install the mod. Plain clicks pass straight through.
- *
- * v0.1 records favourites but does not yet filter by them — that's the M3 "Favourites tab".
  */
 object PickerController {
 
+    private enum class FilterMode { NORMAL, REVEAL, FAVOURITES_ONLY }
+
     private var injectedPicker: UIPanelAPI? = null
-    private var wasRevealing = false
+    private var lastMode = FilterMode.NORMAL
 
     fun process(picker: UIPanelAPI) {
         if (picker !== injectedPicker) {
             injectedPicker = picker
-            wasRevealing = false
             injectMarkingOverlay(picker)
         }
-        applyBlacklistFilter(picker)
+        applyFilter(picker)
     }
 
     // --- Filtering -----------------------------------------------------------------------------
 
-    private fun applyBlacklistFilter(picker: UIPanelAPI) {
+    private fun applyFilter(picker: UIPanelAPI) {
         val table = findTable(picker) ?: return
 
-        val revealing = Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU)
-        if (revealing && !wasRevealing) {
-            // Entering reveal mode: ask the dialog to repopulate so hidden rows come back.
-            runCatching { picker.invoke("updateTable") }
+        val alt = Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU)
+        val favOnly = Keyboard.isKeyDown(Keyboard.KEY_GRAVE)
+        val mode = when {
+            alt -> FilterMode.REVEAL
+            favOnly -> FilterMode.FAVOURITES_ONLY
+            else -> FilterMode.NORMAL
         }
-        wasRevealing = revealing
-        if (revealing) return
+
+        // On any mode change, repopulate first so rows hidden under the previous mode come back
+        // before we re-filter — this makes every transition (grow or shrink) behave correctly.
+        if (mode != lastMode) runCatching { picker.invoke("updateTable") }
+        lastMode = mode
+        if (mode == FilterMode.REVEAL) return
 
         val blacklist = HullmodPrefs.blacklist()
-        if (blacklist.isEmpty()) return
+        val favourites = HullmodPrefs.favourites()
+        if (blacklist.isEmpty() && mode != FilterMode.FAVOURITES_ONLY) return
 
         val rows = table.invoke("getRows") as? List<*> ?: return
         val toRemove = rows.filter { row ->
-            val id = row?.specOrNull()?.id
-            id != null && id in blacklist
+            val id = row?.specOrNull()?.id ?: return@filter false
+            id in blacklist || (mode == FilterMode.FAVOURITES_ONLY && id !in favourites)
         }
         if (toRemove.isEmpty()) return
 
