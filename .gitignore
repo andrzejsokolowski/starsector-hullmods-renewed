@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+
+# Claude / planning scratch
+.claude/
+
+# Compiled output
+out/
+bin/
+
+# IntelliJ
+.idea/
+*.iml
+
+# NOTE: gradle.properties IS tracked here (unlike some setups) because it holds the
+# build-critical `kotlin.stdlib.default.dependency=false` flag. If you fork this and your
+# Starsector lives elsewhere, just edit `starsectorPath` in it.
+
+# Built jar is committed on release tags only; ignore during normal dev to avoid churn.
+# (Comment the next line out if you prefer to commit jars/.)
+jars/

@@ -1,0 +1,15 @@
+Hullmods - Renewed
+==================
+
+Overall project license: TBD (to be chosen by the author).
+
+Third-party / vendored components:
+
+- src/org/starficz/UIFramework/**
+    Copyright Starficz. Licensed under LGPL-3.0-only.
+    https://www.gnu.org/licenses/lgpl-3.0.html
+    (Vendored from the Refit Filters mod. Keep this notice and the per-file headers,
+     and keep this package's source available.)
+
+Patterns/snippets adapted from org.starficz.refitfilters are released by their author
+under CC0-1.0 (public domain).
