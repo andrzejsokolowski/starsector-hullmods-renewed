@@ -17,7 +17,7 @@ import hullmodsrenewed.uiframework.y
  */
 object RefitDebug {
 
-    const val ENABLED = true
+    const val ENABLED = false
 
     private val log = Global.getLogger(RefitDebug::class.java)
 
