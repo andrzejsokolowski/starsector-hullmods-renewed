@@ -4,28 +4,27 @@ Requested features not yet scheduled into the current milestone.
 
 ---
 
-## "Installable only" filter toggle  *(requested 2026-06-21)*
+## "Applicable to this ship" filter toggle  *(requested 2026-06-21, clarified same day)*
 
-**Ask:** a switch in the hull-mod picker that shows **only hull mods that can actually be
-installed on the current ship**, hiding ones that are not applicable. Motivation: in a heavily
-modded game many hull mods are restricted to a specific ship / ship type / hull size, and they
-clutter the list for ships they can never go on.
+**Ask:** a switch in the hull-mod picker that hides hull mods that can **never** apply to this
+kind of ship. Example given: a carrier hull mod (needs hangar bays) should not appear for a ship
+with no bays. Motivation: in a heavily modded game many hull mods are restricted by hull
+type/characteristics and clutter the list for ships they can never go on.
 
-**Two criteria to distinguish (confirm scope when implementing):**
-1. **Applicable to this ship** — passes the hull mod's ship/type/size restrictions
-   (`HullModEffect.isApplicableToShip(ship)` / `getUnapplicableReason`; the dialog's own
-   `isApplicable(spec, ship)`). *This is the primary ask.*
-2. **Affordable right now** — enough free OP to install (dialog's `canAfford(spec, ship)`;
-   `canInstall` = applicable AND affordable). The user phrased it "if you have the OP or not",
-   so OP-affordability is a **secondary / optional** sub-criterion — likely a separate toggle,
-   not bundled into the applicability filter.
+**Scope — structural applicability only. NOT OP affordability.** The user explicitly does *not*
+want an OP-based filter ("if you have the OP or not"). The filter is purely "is this mod ever
+applicable to this hull?", independent of current ordnance points.
 
-**Default behaviour — to decide:** the user said they "obviously don't want to see [N/A mods]
-by default", which suggests the applicability filter could default **ON** (hide non-applicable),
-with the toggle used to reveal everything. Counterpoint: vanilla shows non-applicable mods greyed
-out, and some players rely on seeing them. Recommendation: ship a toggle whose default is
-configurable (LunaLib setting), leaning default-ON for the applicability filter, default-OFF for
-the OP-affordability one.
+- Use `HullModEffect.isApplicableToShip(ship)` (public API) or the dialog's own
+  `isApplicable(spec, ship)` — both ignore OP. `getUnapplicableReason` available for tooltips.
+- Edge case to note (not block on): `isApplicableToShip` can also return false for *transient*
+  reasons (e.g. conflicts with a currently-installed mod), not only permanent hull restrictions.
+  There's no clean "ever applicable, ignoring current loadout" API. Ship with `isApplicableToShip`
+  as the proxy — it nails the carrier/bays case; revisit only if transient hiding annoys in play.
+
+**Default behaviour:** the user "obviously" doesn't want N/A mods by default → the toggle defaults
+**ON** (hides non-applicable). Provide a LunaLib setting to change the default, and the in-picker
+switch to flip it per-session.
 
 **Implementation notes (from the M1 spike — see SPIKE-FINDINGS.md):**
 - Reuse the M2 row-filter pipeline in `PickerController.applyBlacklistFilter` (generalise it into
