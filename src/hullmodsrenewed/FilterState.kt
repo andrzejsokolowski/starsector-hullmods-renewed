@@ -12,5 +12,6 @@ package hullmodsrenewed
 object FilterState {
     var favouritesOnly = false
     var showBlacklisted = false
-    // applicableOnly + facet selections (design type / type / OP range / search) land here next.
+    var applicableOnly = true   // default ON: hide mods that can never go on this ship (e.g. carrier mod on a no-bay hull)
+    // facet selections (design type / type / OP range / search) land here next.
 }

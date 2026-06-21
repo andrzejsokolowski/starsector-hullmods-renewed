@@ -41,10 +41,14 @@ object PickerController {
     private var injectedPicker: UIPanelAPI? = null
     private var lastSignature = ""
 
+    /** Per-picker cache of "is this hull-mod applicable to the current ship" (id -> applicable). */
+    private val applicableCache = HashMap<String, Boolean>()
+
     fun process(picker: UIPanelAPI) {
         if (picker !== injectedPicker) {
             injectedPicker = picker
             lastSignature = ""
+            applicableCache.clear()
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
             injectMarkingOverlay(picker)
             injectLeftPanel(picker)
@@ -62,21 +66,30 @@ object PickerController {
             Keyboard.isKeyDown(Keyboard.KEY_GRAVE)
         val showBlacklisted = FilterState.showBlacklisted ||
             Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU)
+        val applicableOnly = FilterState.applicableOnly
 
         val blacklist = HullmodPrefs.blacklist()
         val favourites = HullmodPrefs.favourites()
 
         // When the effective filter changes, rebuild the table first so loosening brings rows back.
-        val signature = "$favOnly|$showBlacklisted|${blacklist.size}|${favourites.size}"
+        val signature = "$favOnly|$showBlacklisted|$applicableOnly|${blacklist.size}|${favourites.size}"
         if (signature != lastSignature) {
             runCatching { picker.invoke("updateTable") }
             lastSignature = signature
         }
 
+        val ship = if (applicableOnly) resolveShip(picker) else null
+
         val rows = table.invoke("getRows") as? List<*> ?: return
         val toRemove = rows.filter { row ->
-            val id = row?.specOrNull()?.id ?: return@filter false
-            (!showBlacklisted && id in blacklist) || (favOnly && id !in favourites)
+            val data = runCatching { row?.invoke("getData") }.getOrNull() ?: return@filter false
+            val id = (data as? HullModSpecAPI)?.id ?: return@filter false
+            when {
+                !showBlacklisted && id in blacklist -> true
+                favOnly && id !in favourites -> true
+                applicableOnly && ship != null && !isApplicableToShip(picker, ship, data, id) -> true
+                else -> false
+            }
         }
         if (toRemove.isEmpty()) return
 
@@ -146,6 +159,11 @@ object PickerController {
                 isChecked = FilterState.showBlacklisted
                 onClick { FilterState.showBlacklisted = isChecked }
             }
+            AreaCheckbox("Applicable only", base, bg, bright, cbWidth, 30f, leftAlign = true) {
+                position.inTL(14f, 120f)
+                isChecked = FilterState.applicableOnly
+                onClick { FilterState.applicableOnly = isChecked }
+            }
         }.apply {
             position.inTL(0f, 0f)
             xAlignOffset = leftScreen - picker.left
@@ -162,6 +180,19 @@ object PickerController {
     /** The picker's `UITable` (found by the table-unique `getRowForData` method). */
     private fun findTable(picker: UIPanelAPI): Any? =
         findDescendant(picker) { it.hasMethod("getRowForData") }
+
+    /** The combat Ship being refitted: picker -> refit panel -> ship display -> ship (implements ShipAPI). */
+    private fun resolveShip(picker: UIPanelAPI): Any? = runCatching {
+        val refitPanel = picker.invoke("getRefitPanel")
+        val shipDisplay = refitPanel?.invoke("getShipDisplay")
+        shipDisplay?.invoke("getShip")
+    }.getOrNull()
+
+    /** Uses the dialog's own check (the one that renders rows as "n/a"); cached per picker session. */
+    private fun isApplicableToShip(picker: UIPanelAPI, ship: Any, data: Any, id: String): Boolean =
+        applicableCache.getOrPut(id) {
+            runCatching { picker.invoke("isApplicable", data, ship) as? Boolean }.getOrNull() ?: true
+        }
 
     private fun Any.specOrNull(): HullModSpecAPI? = runCatching { invoke("getData") }.getOrNull() as? HullModSpecAPI
 }
