@@ -1,6 +1,5 @@
 package hullmodsrenewed
 
-import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.loading.HullModSpecAPI
 import com.fs.starfarer.api.ui.Alignment
 import com.fs.starfarer.api.ui.ButtonAPI
@@ -74,11 +73,6 @@ object PickerController {
     private var desiredSortColumn: Any? = null
     private var sortResetHandled = false
 
-    // TEMP diagnostics for the sort-reset bug. Capped so it can't flood the log.
-    private val log = Global.getLogger(PickerController::class.java)
-    private var sortLogCount = 0
-    private var prevSortId = -1
-
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
 
@@ -91,8 +85,6 @@ object PickerController {
             defaultSortColumn = null
             desiredSortColumn = null
             sortResetHandled = false
-            sortLogCount = 0
-            prevSortId = -1
             FilterState.clearTransient()   // fresh search + facet selection each time the picker opens
             buildFacetModel(picker)
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
@@ -121,12 +113,6 @@ object PickerController {
         } else if (desiredSortColumn != null && curSort === defaultSortColumn && !sortResetHandled) {
             sortResetHandled = true            // sort was reset to default (e.g. install) -> rebuild w/ restore
             lastSignature = ""
-        }
-        val cid = System.identityHashCode(curSort)
-        if (cid != prevSortId && sortLogCount < 40) {
-            prevSortId = cid; sortLogCount++
-            log.info("HMR sort track: cur=#$cid(${curSort?.javaClass?.simpleName}) " +
-                "default=#${System.identityHashCode(defaultSortColumn)} desired=#${System.identityHashCode(desiredSortColumn)}")
         }
 
         // Effective = persistent toggle (button) OR momentary hold-key.
@@ -163,10 +149,6 @@ object PickerController {
             runCatching {
                 val t = vanillaTags
                 if (t != null) picker.invoke("tagsChanged", t) else picker.invoke("updateTable")
-            }
-            if (sortLogCount < 40) {
-                sortLogCount++
-                log.info("HMR rebuilt: now=#${System.identityHashCode(runCatching { table.invoke("getLastSortColumn") }.getOrNull())} desired=#${System.identityHashCode(desiredSortColumn)}")
             }
             lastSignature = signature
         }
