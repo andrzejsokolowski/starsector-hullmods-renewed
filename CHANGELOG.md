@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.0.0] - 2026-06-22
+
+First public release — the hull-mod picker overhaul is feature-complete (blacklist,
+favourites, full left-side filter panel, applicable-to-ship filter, vanilla bar
+replaced). See 0.3.0 and 0.4.0 below for the feature details.
+
+### Added
+- The mod list now stretches to fill the space freed by removing the vanilla filter
+  bar, keeping the column headers fixed.
+
 ## [0.4.0] - 2026-06-22
 
 ### Removed

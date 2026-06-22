@@ -400,7 +400,19 @@ object PickerController {
         var node: UIComponentAPI? = tagsWidget
         while (node != null && !node.hasMethod("setMaxShadowHeight")) node = node.parent
         val bar = node ?: tagsWidget.parent ?: tagsWidget
+        val barBottom = bar.bottom
         runCatching { bar.parent?.removeComponent(bar) }
+
+        // Reclaim the freed space: stretch the mod list down to where the bar's bottom was, keeping
+        // its top edge in place. autoSizeToHeight reflows the rows into the taller viewport.
+        val table = findTable(picker) as? UIComponentAPI ?: return
+        val top = table.top
+        val newBottom = barBottom + 30f          // leave a little breathing room at the dialog's bottom
+        val newHeight = top - newBottom
+        if (newHeight > table.height + 2f) runCatching {
+            table.invoke("autoSizeToHeight", newHeight)
+            table.position.setLocation(table.left, newBottom)
+        }
     }
 
     /** The combat Ship being refitted: picker -> refit panel -> ship display -> ship (implements ShipAPI). */
