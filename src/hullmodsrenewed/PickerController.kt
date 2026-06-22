@@ -1,6 +1,8 @@
 package hullmodsrenewed
 
 import com.fs.starfarer.api.loading.HullModSpecAPI
+import com.fs.starfarer.api.ui.Alignment
+import com.fs.starfarer.api.ui.ButtonAPI
 import com.fs.starfarer.api.ui.CustomPanelAPI
 import com.fs.starfarer.api.ui.TextFieldAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
@@ -13,6 +15,7 @@ import hullmodsrenewed.RefitPickerInjector.Companion.hasMethod
 import org.lwjgl.input.Keyboard
 import org.lwjgl.opengl.GL11
 import hullmodsrenewed.uiframework.AreaCheckbox
+import hullmodsrenewed.uiframework.Button
 import hullmodsrenewed.uiframework.CustomPanel
 import hullmodsrenewed.uiframework.Font
 import hullmodsrenewed.uiframework.ReflectionUtils.invoke
@@ -38,6 +41,9 @@ import hullmodsrenewed.uiframework.xAlignOffset
  *    toggle buttons, persistent) OR'd with a hold-keybind (momentary):
  *      - **Favourites only** — button, or hold **`** (backtick) — keep only favourited mods
  *      - **Show blacklisted** — button, or hold **Alt** — stop hiding blacklisted mods
+ *      - **Applicable only** — button — hide mods that can never go on this hull
+ *      - **Search** — substring on name / design type
+ *      - **Design-type / Type facets** — multi-select (click = only this, Shift/Ctrl+click = add)
  *  - **Mark:** a transparent overlay over the picker turns **Ctrl+click** into "toggle blacklist"
  *    and **Shift+click** into "toggle favourite" on the row under the cursor, consuming the click
  *    so the vanilla dialog doesn't also install the mod. Plain clicks pass straight through.
@@ -50,6 +56,7 @@ object PickerController {
     )
 
     private var injectedPicker: UIPanelAPI? = null
+    private var leftPanel: CustomPanelAPI? = null
     private var lastSignature = ""
     private var lastShip: Any? = null
     private var searchField: TextFieldAPI? = null
@@ -132,6 +139,19 @@ object PickerController {
         }
     }
 
+    private fun resetFilters(picker: UIPanelAPI) {
+        FilterState.favouritesOnly = false
+        FilterState.showBlacklisted = false
+        FilterState.applicableOnly = true
+        FilterState.searchText = ""
+        FilterState.selectedDesignTypes.clear()
+        FilterState.selectedTypes.clear()
+        lastSignature = ""                       // force a table rebuild on the next frame
+        leftPanel?.let { runCatching { picker.removeComponent(it) } }
+        injectLeftPanel(picker)                  // rebuild so every checkbox/field shows the reset state
+        runCatching { playSound("ui_button_pressed") }
+    }
+
     // --- Marking overlay -----------------------------------------------------------------------
 
     private fun injectMarkingOverlay(picker: UIPanelAPI) {
@@ -156,63 +176,112 @@ object PickerController {
         overlay.position.inTL(0f, 0f)
     }
 
-    // --- Left filter column (WIP: first-cut placement, to be tuned from screenshots) -----------
+    // --- Left filter column --------------------------------------------------------------------
 
     private fun injectLeftPanel(picker: UIPanelAPI) {
-        // Fill the free zone from a small screen margin up to just left of the hull-mod list.
+        // Fill the free zone (the greyed-out ship selector) from a small margin up to the list.
         val tableComp = findTable(picker) as? UIComponentAPI ?: return
         val gap = 10f
         val rightScreen = tableComp.left - gap
-        // 75% of the full free width, anchored to the list side (don't run to the screen edge).
-        val w = ((rightScreen - 20f) * 0.75f).coerceAtLeast(140f)
+        val w = ((rightScreen - 20f) * 0.75f).coerceAtLeast(160f)
         val leftScreen = rightScreen - w
 
-        picker.CustomPanel(w, picker.height) { plugin ->
+        val base = Misc.getBasePlayerColor()
+        val bg = Misc.getDarkPlayerColor()
+        val bright = Misc.getBrightPlayerColor()
+        val pad = 14f
+        val innerW = w - 2f * pad
+
+        leftPanel = picker.CustomPanel(w, picker.height) { plugin ->
             plugin.renderBelow { alpha ->
                 GL11.glColor4f(0f, 0f, 0f, 0.55f * alpha)
                 GL11.glRectf(plugin.left, plugin.bottom, plugin.right, plugin.top)
                 GL11.glColor4f(0.5f, 0.8f, 1f, alpha)
                 drawBorder(plugin.left, plugin.top, plugin.right, plugin.bottom)
             }
-            Text("Filters (WIP)") { anchorInTopMiddleOfParent(12f) }
+            // Swallow clicks that land on our panel so the vanilla picker doesn't treat them as a
+            // "click outside" and close itself (issue: clicking panel background closed the dialog).
+            // The panel's own child widgets process their clicks first; this only stops the leftover
+            // from reaching the dialog underneath.
+            plugin.onClick { event -> if (event.isLMBDownEvent) event.consume() }
 
-            val base = Misc.getBasePlayerColor()
-            val bg = Misc.getDarkPlayerColor()
-            val bright = Misc.getBrightPlayerColor()
-            val cbWidth = w - 28f
+            Text("Filters") { anchorInTopMiddleOfParent(10f) }
 
-            Text("Search (name / design type)") { position.inTL(14f, 40f) }
-            searchField = TextField(cbWidth, 28f, Font.VICTOR_14) {
-                position.inTL(14f, 60f)
+            Text("Search (name / design type)") { position.inTL(pad, 34f) }
+            searchField = TextField(innerW, 26f, Font.VICTOR_14) {
+                position.inTL(pad, 54f)
                 text = FilterState.searchText
             }
 
-            AreaCheckbox("Favourites only", base, bg, bright, cbWidth, 30f, leftAlign = true) {
-                position.inTL(14f, 100f)
+            AreaCheckbox("Favourites only", base, bg, bright, innerW, 28f, leftAlign = true) {
+                position.inTL(pad, 90f)
                 isChecked = FilterState.favouritesOnly
                 onClick { FilterState.favouritesOnly = isChecked }
             }
-            AreaCheckbox("Show blacklisted", base, bg, bright, cbWidth, 30f, leftAlign = true) {
-                position.inTL(14f, 136f)
+            AreaCheckbox("Show blacklisted", base, bg, bright, innerW, 28f, leftAlign = true) {
+                position.inTL(pad, 122f)
                 isChecked = FilterState.showBlacklisted
                 onClick { FilterState.showBlacklisted = isChecked }
             }
-            AreaCheckbox("Applicable only", base, bg, bright, cbWidth, 30f, leftAlign = true) {
-                position.inTL(14f, 172f)
+            AreaCheckbox("Applicable only", base, bg, bright, innerW, 28f, leftAlign = true) {
+                position.inTL(pad, 154f)
                 isChecked = FilterState.applicableOnly
                 onClick { FilterState.applicableOnly = isChecked }
             }
 
-            // Multi-select facets (design type + type) in a scrollable region below the toggles.
-            val facetTop = 212f
-            val facetWidth = w - 16f
-            val facetHeight = (picker.height - facetTop - 12f).coerceAtLeast(120f)
-            TooltipMakerPanel(facetWidth, facetHeight, withScroller = true) {
-                facetSection(this, "DESIGN TYPE", facetModel.designTypes,
-                    FilterState.selectedDesignTypes, base, bg, bright, facetWidth - 24f)
-                facetSection(this, "TYPE", facetModel.types,
-                    FilterState.selectedTypes, base, bg, bright, facetWidth - 24f)
-            }.position.inTL(8f, facetTop)
+            Button("Reset filters", bright, bg, width = innerW, height = 24f) {
+                position.inTL(pad, 190f)
+                onClick { resetFilters(picker) }
+            }
+
+            // Fixed legend pinned to the bottom so it stays out of the way.
+            val legendH = 110f
+            TooltipMakerPanel(innerW, legendH) {
+                setParaFontColor(Misc.getGrayColor())
+                addPara(legendText(), 2f)
+            }.position.inBL(pad, 10f)
+
+            // Scrollable facet column between the toggles and the legend. The nested scroller never
+            // gets the mouse wheel routed to it by the engine (the dialog grabs it), so we drive it
+            // ourselves: capture scroll events on the container's plugin and move the scroller's
+            // yOffset. The scroller still clips its content to the viewport for us.
+            val facetTop = 222f
+            val facetH = (picker.height - facetTop - (legendH + 18f)).coerceAtLeast(140f)
+            val facetBox = CustomPanel(innerW, facetH) { fcPlugin ->
+                val rowWidth = innerW - 26f
+                // Build the scroller the way LunaLib does: create the element, add ALL content, and
+                // only THEN addUIElement -- the engine reads the content height at add-time to set the
+                // scroll range. (The framework's TooltipMakerPanel adds first and builds after, which
+                // leaves the range at 0, so any yOffset > 0 just blanked the list.)
+                val tm = createUIElement(innerW, facetH, true)
+                tm.position.inTL(0f, 0f)
+                // TYPE first (people filter by type more than design), then DESIGN TYPE. Both grids
+                // are laid out manually 2-per-row to save vertical space, so we set heightSoFar by
+                // hand for the scroller's range.
+                var y = 4f
+                y = facetGroup(tm, "TYPE", facetModel.types,
+                    FilterState.selectedTypes, base, bg, bright, rowWidth, y, columns = 2)
+                y += 12f
+                y = facetGroup(tm, "DESIGN TYPE", facetModel.designTypes,
+                    FilterState.selectedDesignTypes, base, bg, bright, rowWidth, y, columns = 1)
+                tm.setHeightSoFar(y + 8f)
+                addUIElement(tm)
+
+                // Range is correct now (content added before addUIElement), so setYOffset sticks --
+                // no need to re-assert every frame. Re-asserting would actually fight the native
+                // scrollbar drag and pin the list in place. Just nudge yOffset on the scroll event
+                // (which does reach the plugin) and let the native scrollbar handle dragging.
+                val scroller = tm.externalScroller
+                fcPlugin.onScroll { event ->
+                    val s = scroller ?: return@onScroll
+                    val maxOffset = (tm.heightSoFar - facetH).coerceAtLeast(0f)
+                    if (maxOffset <= 0f) return@onScroll
+                    val dir = if (event.eventValue > 0) -1f else 1f   // wheel up -> toward top
+                    s.yOffset = (s.yOffset + dir * 64f).coerceIn(0f, maxOffset)
+                    event.consume()
+                }
+            }
+            facetBox.position.inTL(pad, facetTop)
         }.apply {
             position.inTL(0f, 0f)
             xAlignOffset = leftScreen - picker.left
@@ -223,6 +292,85 @@ object PickerController {
         val comp = row as? UIComponentAPI ?: return false
         return x in comp.left..comp.right && y in comp.bottom..comp.top
     }
+
+    // --- Facets --------------------------------------------------------------------------------
+
+    /** The hull-mods the picker actually offers for this ship: the player's available mods, exactly
+     *  what `ModPickerDialogV3.updateTable` iterates. NOT all specs in the game (that over-counts to
+     *  mods you don't own) and NOT the displayed rows (those carry the vanilla bottom-bar filter). */
+    private fun availableHullMods(picker: UIPanelAPI): List<HullModSpecAPI> = runCatching {
+        val plugin = picker.invoke("getRefitPanel")?.invoke("getCoreUI")?.invoke("getPlugin")
+        (plugin?.invoke("getAvailableHullMods") as? List<*>)?.filterIsInstance<HullModSpecAPI>()
+    }.getOrNull() ?: emptyList()
+
+    /** Build the design-type + type facet lists with counts, over the picker's available-to-this-ship set. */
+    private fun buildFacetModel(picker: UIPanelAPI) {
+        val ship = resolveShip(picker)
+        val specs = availableHullMods(picker)
+            .filter { !it.isHidden }
+            .filter { ship == null || isApplicableToShip(picker, ship, it, it.id) }
+        val design = specs.groupingBy { designTypeOf(it) }.eachCount().toList().sortedBy { it.first.lowercase() }
+        val types = specs.flatMap { it.uiTags }.groupingBy { it }.eachCount().toList().sortedBy { it.first.lowercase() }
+        facetModel = FacetModel(design, types)
+    }
+
+    /**
+     * Renders one multi-select facet group into a (scrollable) tooltip-maker, auto-stacked.
+     * Selection model (Windows-folder style): plain click selects ONLY that entry; clicking the
+     * sole-selected entry clears the group (= no filter); Shift/Ctrl+click toggles an entry in/out.
+     * An empty selection means "no filter" for that group.
+     */
+    private fun facetGroup(
+        tm: TooltipMakerAPI, title: String, entries: List<Pair<String, Int>>,
+        selected: MutableSet<String>, base: Color, bg: Color, bright: Color,
+        rowWidth: Float, startY: Float, columns: Int,
+    ): Float {
+        var y = startY
+        tm.addSectionHeading(title, base, bg, Alignment.MID, 0f).position.inTL(0f, y)
+        y += 24f
+        if (entries.isEmpty()) {
+            tm.addPara("(none)", 0f).position.inTL(2f, y)
+            return y + 20f
+        }
+        // Lay out in `columns` columns (1 = full width, for long names like design types).
+        val colGap = 6f
+        val colW = (rowWidth - colGap * (columns - 1)) / columns
+        val rowH = 24f
+        val rowsTop = y
+        val boxes = ArrayList<Pair<String, ButtonAPI>>(entries.size)
+        entries.forEachIndexed { i, (name, count) ->
+            val col = i % columns
+            val row = i / columns
+            val cb = tm.AreaCheckbox("$name ($count)", base, bg, bright, colW, 20f, leftAlign = true) {
+                position.inTL(col * (colW + colGap), rowsTop + row * rowH)
+            }
+            cb.isChecked = name in selected
+            cb.onClick {
+                if (isMultiSelectKeyDown()) {
+                    if (!selected.add(name)) selected.remove(name)   // toggle membership
+                } else {
+                    val wasSole = selected.size == 1 && name in selected
+                    selected.clear()
+                    if (!wasSole) selected.add(name)                 // exclusive, or clear if re-clicked
+                }
+                boxes.forEach { (n, b) -> b.isChecked = n in selected }
+            }
+            boxes.add(name to cb)
+        }
+        val rows = (entries.size + columns - 1) / columns
+        return rowsTop + rows * rowH
+    }
+
+    private fun isMultiSelectKeyDown(): Boolean =
+        Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT) ||
+            Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL)
+
+    private fun legendText(): String =
+        "Ctrl+click a mod = blacklist it\n" +
+            "Shift+click a mod = favourite it\n" +
+            "Hold  `  = show favourites only\n" +
+            "Hold Alt = reveal blacklisted\n" +
+            "Shift+click = add to filter selection"
 
     // --- Helpers -------------------------------------------------------------------------------
 
@@ -252,30 +400,6 @@ object PickerController {
 
     private fun designTypeOf(spec: HullModSpecAPI): String =
         spec.manufacturer?.takeIf { it.isNotBlank() } ?: "Unknown"
-
-    /** Build the design-type + type facet lists with counts, over the applicable-to-this-ship set. */
-    private fun buildFacetModel(picker: UIPanelAPI) {
-        val rows = (findTable(picker)?.invoke("getRows") as? List<*>) ?: emptyList<Any?>()
-        val ship = resolveShip(picker)
-        val specs = rows.mapNotNull { runCatching { it?.invoke("getData") }.getOrNull() as? HullModSpecAPI }
-            .filter { ship == null || isApplicableToShip(picker, ship, it, it.id) }
-        val design = specs.groupingBy { designTypeOf(it) }.eachCount().toList().sortedBy { it.first.lowercase() }
-        val types = specs.flatMap { it.uiTags }.groupingBy { it }.eachCount().toList().sortedBy { it.first.lowercase() }
-        facetModel = FacetModel(design, types)
-    }
-
-    /** Renders one multi-select facet group into a (scrollable) tooltip-maker, auto-stacked. */
-    private fun facetSection(
-        tm: TooltipMakerAPI, title: String, entries: List<Pair<String, Int>>,
-        selected: MutableSet<String>, base: Color, bg: Color, bright: Color, rowWidth: Float,
-    ) {
-        tm.addPara(title, 10f)
-        for ((name, count) in entries) {
-            val cb = tm.addAreaCheckbox("$name ($count)", name, base, bg, bright, rowWidth, 22f, 2f)
-            cb.isChecked = name in selected
-            cb.onClick { if (cb.isChecked) selected.add(name) else selected.remove(name) }
-        }
-    }
 
     private fun Any.specOrNull(): HullModSpecAPI? = runCatching { invoke("getData") }.getOrNull() as? HullModSpecAPI
 }

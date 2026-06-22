@@ -18,6 +18,7 @@ open class ExtendableCustomUIPanelPlugin(var customPanel: CustomPanelAPI) : Base
     private var onHoverEnterFunctions: MutableList<(InputEventAPI) -> Unit> = mutableListOf()
     private var onHoverExitFunctions: MutableList<(InputEventAPI) -> Unit> = mutableListOf()
     private var onHeldFunctions: MutableList<(InputEventAPI) -> Unit> = mutableListOf()
+    private var onScrollFunctions: MutableList<(InputEventAPI) -> Unit> = mutableListOf()
     private var onKeyDownFunctions: MutableList<(InputEventAPI) -> Unit> = mutableListOf()
     private var onKeyUpFunctions: MutableList<(InputEventAPI) -> Unit> = mutableListOf()
 
@@ -96,6 +97,12 @@ open class ExtendableCustomUIPanelPlugin(var customPanel: CustomPanelAPI) : Base
             }
         }
 
+        if (onScrollFunctions.isNotEmpty()) events.filter { it.isMouseScrollEvent }.forEach { event ->
+            val inElement = event.x.toFloat() in (left-inputCaptureLeftPad)..(right+inputCaptureRightPad) &&
+                    event.y.toFloat() in (bottom-inputCaptureBottomPad)..(top+inputCaptureTopPad)
+            if (inElement) onScrollFunctions.forEach { it(event) }
+        }
+
         events.filter { it.isKeyboardEvent }.forEach { event ->
             if (event.isKeyDownEvent) onKeyDownFunctions.forEach { it(event) }
             if (event.isKeyUpEvent) onKeyUpFunctions.forEach { it(event) }
@@ -109,6 +116,7 @@ open class ExtendableCustomUIPanelPlugin(var customPanel: CustomPanelAPI) : Base
     fun onHoverEnter(function: (InputEventAPI) -> Unit) { onHoverEnterFunctions.add(function) }
     fun onHoverExit(function: (InputEventAPI) -> Unit) { onHoverExitFunctions.add(function) }
     fun onHeld(function: (InputEventAPI) -> Unit) { onHeldFunctions.add(function) }
+    fun onScroll(function: (InputEventAPI) -> Unit) { onScrollFunctions.add(function) }
     fun onKeyDown(function: (InputEventAPI) -> Unit) { onKeyDownFunctions.add(function) }
     fun onKeyUp(function: (InputEventAPI) -> Unit) { onKeyUpFunctions.add(function) }
 }
