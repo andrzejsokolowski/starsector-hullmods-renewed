@@ -12,16 +12,19 @@ favourites, full left-side filter panel, applicable-to-ship filter, vanilla bar
 replaced). See 0.3.0 and 0.4.0 below for the feature details.
 
 ### Added
+
 - The mod list now stretches to fill the space freed by removing the vanilla filter
   bar, keeping the column headers fixed.
 
 ## [0.4.0] - 2026-06-22
 
 ### Removed
+
 - The **vanilla bottom design-type filter bar** — the left-side panel fully replaces it. The vanilla
   filter is held wide open so every available mod still reaches the list.
 
 ### Changed
+
 - **Templates dropped from scope** — the planned "install a named group of hull mods in one click"
   feature will not be built. Mod description updated to match.
 
@@ -31,9 +34,10 @@ The full left-side filter column milestone. The greyed-out ship-selector space i
 the refit hull-mod picker is now a proper filter panel.
 
 ### Added
+
 - **Filter column** on the left of the picker (search + toggles + facets + legend).
 - **Search** box — live substring match on hull-mod name and design type.
-- **Toggle filters**: *Favourites only*, *Show blacklisted*, *Applicable only*
+- **Toggle filters**: _Favourites only_, _Show blacklisted_, _Applicable only_
   (on by default — hides mods that can never go on the current hull).
 - **Multi-select facets** with live counts, sourced from the mods you actually have:
   - **TYPE** (2-column grid) and **DESIGN TYPE** (full-width list).
@@ -46,13 +50,13 @@ the refit hull-mod picker is now a proper filter panel.
 - On-screen **legend** of the controls.
 
 ### Changed
+
 - Facet counts reflect the picker's available-to-you mod list, independent of the
   vanilla bottom-bar filter.
 
 ### Notes
+
 - The vanilla bottom facet bar is still present (to be replaced next).
-- Decoupled from Refit Filters: the vendored UI framework is relocated to
-  `hullmodsrenewed.uiframework`, so the two mods can run side by side.
 
 ## [0.2.0] - earlier
 
