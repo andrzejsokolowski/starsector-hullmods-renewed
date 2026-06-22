@@ -119,8 +119,16 @@ object PickerController {
         if (signature != lastSignature) {
             // Keep the (now-hidden) vanilla design-type filter wide open so updateTable rebuilds the
             // full available list; our left-panel filters below are the only ones that trim it.
+            // updateTable always re-sorts to the dialog's default, so capture the column the player
+            // sorted by and re-apply it afterwards (the dialog's own tagsChanged does the same) --
+            // otherwise installing a mod, which rebuilds the table, throws away an OP/name/etc. sort.
+            val sortColumn = runCatching { table.invoke("getLastSortColumn") }.getOrNull()
             runCatching { vanillaTags?.invoke("checkAll") }
             runCatching { picker.invoke("updateTable") }
+            if (sortColumn != null) runCatching {
+                table.invoke("sort", sortColumn, null)
+                table.invoke("sort", sortColumn, null)
+            }
             lastSignature = signature
         }
 

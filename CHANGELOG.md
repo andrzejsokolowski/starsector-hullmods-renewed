@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.0.1] - 2026-06-22
+
+### Added
+- Version-checker forum-thread link (`modThreadId`), so the updater can jump to the forum thread.
+
+### Fixed
+- The vanilla column sort (OP / Design type / Installed) no longer resets when you install a hull
+  mod with the left-panel filters active. The active sort is captured and re-applied after the
+  picker rebuilds its table.
+
 ## [1.0.0] - 2026-06-22
 
 First public release — the hull-mod picker overhaul is feature-complete (blacklist,
