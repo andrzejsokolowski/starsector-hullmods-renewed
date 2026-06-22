@@ -28,6 +28,7 @@ import hullmodsrenewed.uiframework.drawBorder
 import hullmodsrenewed.uiframework.height
 import hullmodsrenewed.uiframework.left
 import hullmodsrenewed.uiframework.onClick
+import hullmodsrenewed.uiframework.parent
 import hullmodsrenewed.uiframework.playSound
 import hullmodsrenewed.uiframework.right
 import hullmodsrenewed.uiframework.top
@@ -62,6 +63,10 @@ object PickerController {
     private var searchField: TextFieldAPI? = null
     private var facetModel = FacetModel(emptyList(), emptyList())
 
+    /** The vanilla design-type filter widget (`ModPickerDialogV3.tags`). We hide its bar and keep a
+     *  reference so we can keep every mod passing the vanilla filter (our left panel replaces it). */
+    private var vanillaTags: Any? = null
+
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
 
@@ -76,6 +81,7 @@ object PickerController {
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
             injectMarkingOverlay(picker)
             injectLeftPanel(picker)
+            hideVanillaFilterBar(picker)
         }
         applyFilter(picker)
     }
@@ -111,6 +117,9 @@ object PickerController {
         val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
             "${selType.sorted()}|${blacklist.size}|${favourites.size}|${System.identityHashCode(ship)}"
         if (signature != lastSignature) {
+            // Keep the (now-hidden) vanilla design-type filter wide open so updateTable rebuilds the
+            // full available list; our left-panel filters below are the only ones that trim it.
+            runCatching { vanillaTags?.invoke("checkAll") }
             runCatching { picker.invoke("updateTable") }
             lastSignature = signature
         }
@@ -377,6 +386,22 @@ object PickerController {
     /** The picker's `UITable` (found by the table-unique `getRowForData` method). */
     private fun findTable(picker: UIPanelAPI): Any? =
         findDescendant(picker) { it.hasMethod("getRowForData") }
+
+    /**
+     * Removes the vanilla design-type filter bar at the bottom of the picker (our left panel
+     * replaces it). The filter widget is found by its unique `getAllTags` method; we keep a
+     * reference ([vanillaTags]) to keep it fully checked so it never trims our list, then drop its
+     * scroller container (`setMaxShadowHeight`) from the layout.
+     */
+    private fun hideVanillaFilterBar(picker: UIPanelAPI) {
+        val tagsWidget = findDescendant(picker) { it.hasMethod("getAllTags") } as? UIComponentAPI ?: return
+        vanillaTags = tagsWidget
+        runCatching { tagsWidget.invoke("checkAll") }
+        var node: UIComponentAPI? = tagsWidget
+        while (node != null && !node.hasMethod("setMaxShadowHeight")) node = node.parent
+        val bar = node ?: tagsWidget.parent ?: tagsWidget
+        runCatching { bar.parent?.removeComponent(bar) }
+    }
 
     /** The combat Ship being refitted: picker -> refit panel -> ship display -> ship (implements ShipAPI). */
     private fun resolveShip(picker: UIPanelAPI): Any? = runCatching {

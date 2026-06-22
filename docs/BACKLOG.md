@@ -4,6 +4,13 @@ Requested features not yet scheduled into the current milestone.
 
 ---
 
+## Cut from scope
+
+- **Templates** (named groups of hull mods installed in one click) — dropped 2026-06-22. The user
+  decided they'd effectively never be used, so this won't be built.
+
+---
+
 ## "Applicable to this ship" filter toggle  *(requested 2026-06-21, clarified same day)*
 
 **Ask:** a switch in the hull-mod picker that hides hull mods that can **never** apply to this

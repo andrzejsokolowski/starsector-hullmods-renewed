@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [0.4.0] - 2026-06-22
+
+### Removed
+- The **vanilla bottom design-type filter bar** — the left-side panel fully replaces it. The vanilla
+  filter is held wide open so every available mod still reaches the list.
+
+### Changed
+- **Templates dropped from scope** — the planned "install a named group of hull mods in one click"
+  feature will not be built. Mod description updated to match.
+
 ## [0.3.0] - 2026-06-22
 
 The full left-side filter column milestone. The greyed-out ship-selector space in
