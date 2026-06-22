@@ -1,5 +1,6 @@
 package hullmodsrenewed
 
+import com.fs.starfarer.api.Global
 import com.fs.starfarer.api.loading.HullModSpecAPI
 import com.fs.starfarer.api.ui.Alignment
 import com.fs.starfarer.api.ui.ButtonAPI
@@ -67,6 +68,17 @@ object PickerController {
      *  reference so we can keep every mod passing the vanilla filter (our left panel replaces it). */
     private var vanillaTags: Any? = null
 
+    /** Sort preservation: the table's default sort column (first one we ever see) and the column the
+     *  player deliberately sorted by. We re-assert the latter after any rebuild re-sorts to default. */
+    private var defaultSortColumn: Any? = null
+    private var desiredSortColumn: Any? = null
+    private var sortResetHandled = false
+
+    // TEMP diagnostics for the sort-reset bug. Capped so it can't flood the log.
+    private val log = Global.getLogger(PickerController::class.java)
+    private var sortLogCount = 0
+    private var prevSortId = -1
+
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
 
@@ -76,6 +88,11 @@ object PickerController {
             lastSignature = ""
             applicableCache.clear()
             searchField = null
+            defaultSortColumn = null
+            desiredSortColumn = null
+            sortResetHandled = false
+            sortLogCount = 0
+            prevSortId = -1
             FilterState.clearTransient()   // fresh search + facet selection each time the picker opens
             buildFacetModel(picker)
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
@@ -90,6 +107,27 @@ object PickerController {
 
     private fun applyFilter(picker: UIPanelAPI) {
         val table = findTable(picker) ?: return
+
+        // Remember the player's chosen sort so we can restore it after a rebuild (installing a mod
+        // rebuilds the table and vanilla re-sorts to its default). The first column we ever observe
+        // IS that default; anything different is a deliberate choice. Tracked every frame because the
+        // reset happens during the install click, before our updateTable below.
+        val curSort = runCatching { table.invoke("getLastSortColumn") }.getOrNull()
+        if (defaultSortColumn == null) {
+            defaultSortColumn = curSort
+        } else if (curSort != null && curSort !== defaultSortColumn) {
+            desiredSortColumn = curSort        // player picked a non-default sort
+            sortResetHandled = false
+        } else if (desiredSortColumn != null && curSort === defaultSortColumn && !sortResetHandled) {
+            sortResetHandled = true            // sort was reset to default (e.g. install) -> rebuild w/ restore
+            lastSignature = ""
+        }
+        val cid = System.identityHashCode(curSort)
+        if (cid != prevSortId && sortLogCount < 40) {
+            prevSortId = cid; sortLogCount++
+            log.info("HMR sort track: cur=#$cid(${curSort?.javaClass?.simpleName}) " +
+                "default=#${System.identityHashCode(defaultSortColumn)} desired=#${System.identityHashCode(desiredSortColumn)}")
+        }
 
         // Effective = persistent toggle (button) OR momentary hold-key.
         val favOnly = FilterState.favouritesOnly ||
@@ -117,42 +155,43 @@ object PickerController {
         val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
             "${selType.sorted()}|${blacklist.size}|${favourites.size}|${System.identityHashCode(ship)}"
         if (signature != lastSignature) {
-            // Keep the (now-hidden) vanilla design-type filter wide open so updateTable rebuilds the
-            // full available list; our left-panel filters below are the only ones that trim it.
-            // updateTable always re-sorts to the dialog's default, so capture the column the player
-            // sorted by and re-apply it afterwards (the dialog's own tagsChanged does the same) --
-            // otherwise installing a mod, which rebuilds the table, throws away an OP/name/etc. sort.
-            val sortColumn = runCatching { table.invoke("getLastSortColumn") }.getOrNull()
+            // Keep the (now-hidden) vanilla design-type filter wide open so the rebuild shows the full
+            // available list; our left-panel filters below are the only ones that trim it. Rebuild via
+            // the dialog's own tagsChanged (not plain updateTable) because tagsChanged re-applies the
+            // player's sort after rebuilding -- updateTable always reverts to the default sort.
             runCatching { vanillaTags?.invoke("checkAll") }
-            runCatching { picker.invoke("updateTable") }
-            if (sortColumn != null) runCatching {
-                table.invoke("sort", sortColumn, null)
-                table.invoke("sort", sortColumn, null)
+            runCatching {
+                val t = vanillaTags
+                if (t != null) picker.invoke("tagsChanged", t) else picker.invoke("updateTable")
+            }
+            if (sortLogCount < 40) {
+                sortLogCount++
+                log.info("HMR rebuilt: now=#${System.identityHashCode(runCatching { table.invoke("getLastSortColumn") }.getOrNull())} desired=#${System.identityHashCode(desiredSortColumn)}")
             }
             lastSignature = signature
         }
 
-        val rows = table.invoke("getRows") as? List<*> ?: return
-        val toRemove = rows.filter { row ->
-            val data = runCatching { row?.invoke("getData") }.getOrNull() ?: return@filter false
-            val spec = data as? HullModSpecAPI ?: return@filter false
-            val id = spec.id
-            when {
-                !showBlacklisted && id in blacklist -> true
-                favOnly && id !in favourites -> true
-                applicableOnly && ship != null && !isApplicableToShip(picker, ship, data, id) -> true
-                query.isNotEmpty() && !matchesSearch(spec, query) -> true
-                selDesign.isNotEmpty() && designTypeOf(spec) !in selDesign -> true
-                selType.isNotEmpty() && spec.uiTags.none { it in selType } -> true
-                else -> false
+        val rows = table.invoke("getRows") as? List<*>
+        if (rows != null) {
+            val toRemove = rows.filter { row ->
+                val data = runCatching { row?.invoke("getData") }.getOrNull() ?: return@filter false
+                val spec = data as? HullModSpecAPI ?: return@filter false
+                val id = spec.id
+                when {
+                    !showBlacklisted && id in blacklist -> true
+                    favOnly && id !in favourites -> true
+                    applicableOnly && ship != null && !isApplicableToShip(picker, ship, data, id) -> true
+                    query.isNotEmpty() && !matchesSearch(spec, query) -> true
+                    selDesign.isNotEmpty() && designTypeOf(spec) !in selDesign -> true
+                    selType.isNotEmpty() && spec.uiTags.none { it in selType } -> true
+                    else -> false
+                }
             }
-        }
-        if (toRemove.isEmpty()) return
-
-        runCatching {
-            table.invoke("suspendRecompute")
-            toRemove.forEach { table.invoke("removeRow", it) }
-            table.invoke("resumeRecompute")
+            if (toRemove.isNotEmpty()) runCatching {
+                table.invoke("suspendRecompute")
+                toRemove.forEach { table.invoke("removeRow", it) }
+                table.invoke("resumeRecompute")
+            }
         }
     }
 
