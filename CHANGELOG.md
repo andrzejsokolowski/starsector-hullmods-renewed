@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.0.3] - 2026-06-23
+
+### Fixed
+- The hull-mod list no longer jumps back to the top when you install a mod. We no longer rebuild
+  the table on install (installing rebuilds the preview ship, which we were mistaking for a filter
+  change); the scroll position and column sort are kept.
+
 ## [1.0.2] - 2026-06-22
 
 ### Fixed

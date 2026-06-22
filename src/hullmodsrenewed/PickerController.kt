@@ -137,9 +137,12 @@ object PickerController {
         val blacklist = HullmodPrefs.blacklist()
         val favourites = HullmodPrefs.favourites()
 
-        // When the effective filter changes, rebuild the table first so loosening brings rows back.
+        // When the effective filter changes, rebuild the table so loosening brings rows back. Ship
+        // identity is deliberately NOT in the signature: installing a mod rebuilds the preview ship
+        // (new object) but it's the same hull, and rebuilding then would reset the list scroll and
+        // sort. Vanilla refreshes the table itself on a real ship switch, so we don't need to.
         val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
-            "${selType.sorted()}|${blacklist.size}|${favourites.size}|${System.identityHashCode(ship)}"
+            "${selType.sorted()}|${blacklist.size}|${favourites.size}"
         if (signature != lastSignature) {
             // Keep the (now-hidden) vanilla design-type filter wide open so the rebuild shows the full
             // available list; our left-panel filters below are the only ones that trim it. Rebuild via
