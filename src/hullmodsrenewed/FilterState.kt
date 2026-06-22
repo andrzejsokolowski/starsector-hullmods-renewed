@@ -5,9 +5,10 @@ package hullmodsrenewed
  * and the hold-keybinds (momentary). The filter pipeline reads the *effective* value, which is the
  * persistent toggle OR'd with the momentary hold (see [PickerController.applyFilter]).
  *
- * Survives picker re-opens within a session (it's an object), so your filter choices stick as you
- * refit different ships. Blacklist/favourite *membership* lives per-save in [HullmodPrefs]; this is
- * just which filters are active.
+ * Survives picker re-opens within a session (it's an object), so all your filter choices -- toggles,
+ * search text, and facet selections -- stick as you close/reopen the picker and refit different ships
+ * (use "Reset filters" to clear them). Blacklist/favourite *membership* lives per-save in
+ * [HullmodPrefs]; this is just which filters are active.
  */
 object FilterState {
     var favouritesOnly = false

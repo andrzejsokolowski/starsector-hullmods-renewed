@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.1.2] - 2026-06-23
+
+### Fixed
+- Blacklisting or favouriting a mod (Ctrl/Shift+click) no longer jumps the list to the top. Marking
+  changes the filter signature and so rebuilds the table; the scroll position is now kept across that
+  rebuild, the same as for refit actions.
+
+## [1.1.1] - 2026-06-23
+
+### Fixed
+- The hull-mod list no longer jumps to the top when you add flux vents or capacitors (or otherwise
+  change the ship's loadout) with the picker open. The scroll position is now kept across the
+  picker's table rebuild, the same way it is for installing a mod. Switching to a different hull
+  still starts at the top, and changing a filter still shows the top.
+
+## [1.1.0] - 2026-06-23
+
+### Changed
+- Filter selections (search text, type/design-type facets, and the toggles) now persist when you
+  close and reopen the hull-mod picker within a session, matching vanilla. Previously the search and
+  facet selections were cleared every time the picker opened. Use **Reset filters** to clear them.
+
 ## [1.0.3] - 2026-06-23
 
 ### Fixed

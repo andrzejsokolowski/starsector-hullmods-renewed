@@ -76,6 +76,13 @@ object PickerController {
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
 
+    /** Scroll preservation: the hull id + a fingerprint of the loadout (flux vents/capacitors,
+     *  installed mods, and our blacklist/favourite marks) seen last frame. Lets us tell an action we
+     *  want to keep the scroll through (a refit change or a marking) from a hull switch or a filter
+     *  change (which both go to the top). */
+    private var lastHullId: String? = null
+    private var lastLoadoutFp = Int.MIN_VALUE
+
     fun process(picker: UIPanelAPI) {
         if (picker !== injectedPicker) {
             injectedPicker = picker
@@ -85,7 +92,11 @@ object PickerController {
             defaultSortColumn = null
             desiredSortColumn = null
             sortResetHandled = false
-            FilterState.clearTransient()   // fresh search + facet selection each time the picker opens
+            lastHullId = null
+            lastLoadoutFp = Int.MIN_VALUE
+            // Filter selections (search + facets + toggles) are deliberately NOT cleared here, so they
+            // persist across closing and reopening the picker within a session, matching vanilla. Use
+            // "Reset filters" to clear them. (FilterState is a singleton, so the values just stick.)
             buildFacetModel(picker)
             RefitDebug.dumpTree(picker, "ModPickerDialogV3")
             injectMarkingOverlay(picker)
@@ -178,15 +189,55 @@ object PickerController {
                 table.invoke("resumeRecompute")
             }
         }
+
+        preserveScroll(picker, table, blacklist.size, favourites.size)
+    }
+
+    /**
+     * Keeps the list's scroll position across table rebuilds. The picker's `updateTable()` does
+     * clear()+re-add and never saves/restores its scroller, so anything that refreshes the picker --
+     * installing a mod, adding flux vents/capacitors, or blacklisting/favouriting a mod (which
+     * changes our filter signature and so rebuilds the table) -- snaps the list back to the top.
+     *
+     * We mirror the player's scroll every stable frame (via the scroller's own
+     * `saveVerticalScrollState`) and restore it the frame the loadout changes on the SAME hull
+     * (a refit change or a blacklist/favourite mark). A real hull switch (different hull id) is left
+     * at the top, which is what vanilla does; a plain filter change (toggles/search/facets) leaves
+     * the loadout untouched, so it falls through to the stable branch and ends up at the top after
+     * its own rebuild.
+     */
+    private fun preserveScroll(picker: UIPanelAPI, table: Any, blacklistSize: Int, favouritesSize: Int) {
+        val variant = runCatching {
+            picker.invoke("getRefitPanel")?.invoke("getShipDisplay")?.invoke("getCurrentVariant")
+        }.getOrNull() ?: return
+        val scroller = runCatching { table.invoke("getList")?.invoke("getScroller") }.getOrNull() ?: return
+
+        val hullId = runCatching { variant.invoke("getHullSpec")?.invoke("getHullId") as? String }.getOrNull()
+        val vents = runCatching { variant.invoke("getNumFluxVents") as? Int }.getOrNull() ?: 0
+        val caps = runCatching { variant.invoke("getNumFluxCapacitors") as? Int }.getOrNull() ?: 0
+        val mods = runCatching { (variant.invoke("getNonBuiltInHullmods") as? Collection<*>)?.size }.getOrNull() ?: 0
+        val loadoutFp = vents + caps * 1009 + mods * 1_000_003 + blacklistSize * 31 + favouritesSize * 131
+
+        when {
+            hullId != lastHullId -> {              // switched to a different hull: let it sit at the top
+                lastHullId = hullId
+                lastLoadoutFp = loadoutFp
+            }
+            loadoutFp != lastLoadoutFp -> {        // refit change or mark on this hull: keep position
+                runCatching { scroller.invoke("restoreVerticalScrollState") }
+                lastLoadoutFp = loadoutFp
+            }
+            else -> {                              // stable frame: remember where the player is
+                runCatching { scroller.invoke("saveVerticalScrollState") }
+            }
+        }
     }
 
     private fun resetFilters(picker: UIPanelAPI) {
         FilterState.favouritesOnly = false
         FilterState.showBlacklisted = false
         FilterState.applicableOnly = true
-        FilterState.searchText = ""
-        FilterState.selectedDesignTypes.clear()
-        FilterState.selectedTypes.clear()
+        FilterState.clearTransient()             // search text + facet selections
         lastSignature = ""                       // force a table rebuild on the next frame
         leftPanel?.let { runCatching { picker.removeComponent(it) } }
         injectLeftPanel(picker)                  // rebuild so every checkbox/field shows the reset state
