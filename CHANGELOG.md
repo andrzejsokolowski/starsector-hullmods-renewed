@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.0.2] - 2026-06-22
+
+### Fixed
+- Corrected the repository name in the version file URLs (`masterVersionFile` / `directDownloadURL`)
+  so the version checker resolves the master version file and download.
+
 ## [1.0.1] - 2026-06-22
 
 ### Added
