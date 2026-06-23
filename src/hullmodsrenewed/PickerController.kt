@@ -76,10 +76,25 @@ object PickerController {
     /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
     private val applicableCache = HashMap<String, Boolean>()
 
+    /** Last mouse position over the picker (UI space), tracked so a number-key press can mark the
+     *  hull-mod currently under the cursor into a custom group. */
+    private var hoverX = 0f
+    private var hoverY = 0f
+
+    /** Group-number keys currently held, so auto-repeat doesn't toggle a mod's group every frame. */
+    private val heldGroupKeys = HashSet<Int>()
+
+    /** Number-row keys that mark the hovered mod into the matching custom group: 1-9 then 0 for the
+     *  10th group (order matches the on-screen squares). */
+    private val groupKeys = intArrayOf(
+        Keyboard.KEY_1, Keyboard.KEY_2, Keyboard.KEY_3, Keyboard.KEY_4, Keyboard.KEY_5,
+        Keyboard.KEY_6, Keyboard.KEY_7, Keyboard.KEY_8, Keyboard.KEY_9, Keyboard.KEY_0,
+    )
+
     /** Scroll preservation: the hull id + a fingerprint of the loadout (flux vents/capacitors,
-     *  installed mods, and our blacklist/favourite marks) seen last frame. Lets us tell an action we
-     *  want to keep the scroll through (a refit change or a marking) from a hull switch or a filter
-     *  change (which both go to the top). */
+     *  installed mods, and our blacklist/favourite/custom-group marks) seen last frame. Lets us tell
+     *  an action we want to keep the scroll through (a refit change or a marking) from a hull switch
+     *  or a filter change (which both go to the top). */
     private var lastHullId: String? = null
     private var lastLoadoutFp = Int.MIN_VALUE
 
@@ -94,6 +109,7 @@ object PickerController {
             sortResetHandled = false
             lastHullId = null
             lastLoadoutFp = Int.MIN_VALUE
+            heldGroupKeys.clear()
             // Filter selections (search + facets + toggles) are deliberately NOT cleared here, so they
             // persist across closing and reopening the picker within a session, matching vanilla. Use
             // "Reset filters" to clear them. (FilterState is a singleton, so the values just stick.)
@@ -148,12 +164,20 @@ object PickerController {
         val blacklist = HullmodPrefs.blacklist()
         val favourites = HullmodPrefs.favourites()
 
+        // Custom-group filter: union of the selected groups' members (OR within), or null for "no group
+        // filter". groupTotal (the total membership across all groups) goes in the signature so marking
+        // a mod into a group rebuilds the list, and into the loadout fingerprint so it keeps the scroll.
+        val selGroups = FilterState.selectedGroups
+        val groupUnion: Set<String>? =
+            if (selGroups.isEmpty()) null else selGroups.flatMapTo(HashSet()) { HullmodPrefs.groupMembers(it) }
+        val groupTotal = (1..HullmodPrefs.GROUP_COUNT).sumOf { HullmodPrefs.groupMembers(it).size }
+
         // When the effective filter changes, rebuild the table so loosening brings rows back. Ship
         // identity is deliberately NOT in the signature: installing a mod rebuilds the preview ship
         // (new object) but it's the same hull, and rebuilding then would reset the list scroll and
         // sort. Vanilla refreshes the table itself on a real ship switch, so we don't need to.
         val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
-            "${selType.sorted()}|${blacklist.size}|${favourites.size}"
+            "${selType.sorted()}|${selGroups.sorted()}|${blacklist.size}|${favourites.size}|$groupTotal"
         if (signature != lastSignature) {
             // Keep the (now-hidden) vanilla design-type filter wide open so the rebuild shows the full
             // available list; our left-panel filters below are the only ones that trim it. Rebuild via
@@ -180,6 +204,7 @@ object PickerController {
                     query.isNotEmpty() && !matchesSearch(spec, query) -> true
                     selDesign.isNotEmpty() && designTypeOf(spec) !in selDesign -> true
                     selType.isNotEmpty() && spec.uiTags.none { it in selType } -> true
+                    groupUnion != null && id !in groupUnion -> true
                     else -> false
                 }
             }
@@ -190,7 +215,7 @@ object PickerController {
             }
         }
 
-        preserveScroll(picker, table, blacklist.size, favourites.size)
+        preserveScroll(picker, table, blacklist.size, favourites.size, groupTotal)
     }
 
     /**
@@ -206,7 +231,9 @@ object PickerController {
      * the loadout untouched, so it falls through to the stable branch and ends up at the top after
      * its own rebuild.
      */
-    private fun preserveScroll(picker: UIPanelAPI, table: Any, blacklistSize: Int, favouritesSize: Int) {
+    private fun preserveScroll(
+        picker: UIPanelAPI, table: Any, blacklistSize: Int, favouritesSize: Int, groupTotal: Int,
+    ) {
         val variant = runCatching {
             picker.invoke("getRefitPanel")?.invoke("getShipDisplay")?.invoke("getCurrentVariant")
         }.getOrNull() ?: return
@@ -216,7 +243,8 @@ object PickerController {
         val vents = runCatching { variant.invoke("getNumFluxVents") as? Int }.getOrNull() ?: 0
         val caps = runCatching { variant.invoke("getNumFluxCapacitors") as? Int }.getOrNull() ?: 0
         val mods = runCatching { (variant.invoke("getNonBuiltInHullmods") as? Collection<*>)?.size }.getOrNull() ?: 0
-        val loadoutFp = vents + caps * 1009 + mods * 1_000_003 + blacklistSize * 31 + favouritesSize * 131
+        val loadoutFp = vents + caps * 1009 + mods * 1_000_003 +
+            blacklistSize * 31 + favouritesSize * 131 + groupTotal * 7919
 
         when {
             hullId != lastHullId -> {              // switched to a different hull: let it sit at the top
@@ -248,24 +276,50 @@ object PickerController {
 
     private fun injectMarkingOverlay(picker: UIPanelAPI) {
         val overlay: CustomPanelAPI = picker.CustomPanel(picker.width, picker.height) { plugin ->
+            // Remember where the cursor is so a number-key press knows which row it is over.
+            plugin.onHover { event -> hoverX = event.x.toFloat(); hoverY = event.y.toFloat() }
+
             plugin.onClick { event ->
                 if (!event.isLMBDownEvent) return@onClick
                 val ctrl = event.isCtrlDown
                 val shift = event.isShiftDown
                 if (!ctrl && !shift) return@onClick // let vanilla handle normal clicks
 
-                val table = findTable(picker) ?: return@onClick
-                val rows = table.invoke("getRows") as? List<*> ?: return@onClick
-                val row = rows.firstOrNull { it != null && hitTest(it, event.x.toFloat(), event.y.toFloat()) }
+                val spec = rowUnderCursor(picker, event.x.toFloat(), event.y.toFloat())?.specOrNull()
                     ?: return@onClick
-                val spec = row.specOrNull() ?: return@onClick
 
                 if (ctrl) HullmodPrefs.toggleBlacklist(spec.id) else HullmodPrefs.toggleFavourite(spec.id)
                 runCatching { playSound("ui_button_pressed") } // audible confirmation; never fatal
                 event.consume()
             }
+
+            // Hover a mod and press 1..8 to toggle it in that custom group (RTS-style control groups).
+            plugin.onKeyDown { event ->
+                if (searchField?.hasFocus() == true) return@onKeyDown // typing in the search box, not marking
+                val group = groupKeyToIndex(event.eventValue) ?: return@onKeyDown
+                if (!heldGroupKeys.add(event.eventValue)) return@onKeyDown // ignore key auto-repeat
+                val spec = rowUnderCursor(picker, hoverX, hoverY)?.specOrNull() ?: return@onKeyDown
+                HullmodPrefs.toggleGroup(group, spec.id)
+                runCatching { playSound("ui_button_pressed") }
+                event.consume()
+            }
+            plugin.onKeyUp { event -> heldGroupKeys.remove(event.eventValue) }
         }
         overlay.position.inTL(0f, 0f)
+    }
+
+    /** The picker row whose on-screen box contains (x, y), or null. */
+    private fun rowUnderCursor(picker: UIPanelAPI, x: Float, y: Float): Any? {
+        val table = findTable(picker) ?: return null
+        val rows = table.invoke("getRows") as? List<*> ?: return null
+        return rows.firstOrNull { it != null && hitTest(it, x, y) }
+    }
+
+    /** Maps a number-row key code to a custom-group index (1..[HullmodPrefs.GROUP_COUNT], with 0 ->
+     *  the last group), or null for any other key. */
+    private fun groupKeyToIndex(keyCode: Int): Int? {
+        val i = groupKeys.indexOf(keyCode)
+        return if (i >= 0) i + 1 else null
     }
 
     // --- Left filter column --------------------------------------------------------------------
@@ -327,7 +381,7 @@ object PickerController {
             }
 
             // Fixed legend pinned to the bottom so it stays out of the way.
-            val legendH = 110f
+            val legendH = 128f
             TooltipMakerPanel(innerW, legendH) {
                 setParaFontColor(Misc.getGrayColor())
                 addPara(legendText(), 2f)
@@ -347,10 +401,12 @@ object PickerController {
                 // leaves the range at 0, so any yOffset > 0 just blanked the list.)
                 val tm = createUIElement(innerW, facetH, true)
                 tm.position.inTL(0f, 0f)
-                // TYPE first (people filter by type more than design), then DESIGN TYPE. Both grids
-                // are laid out manually 2-per-row to save vertical space, so we set heightSoFar by
-                // hand for the scroller's range.
+                // CUSTOM GROUPS first (the 8 RTS-style squares), then TYPE (people filter by type more
+                // than design), then DESIGN TYPE. Grids are laid out manually to save vertical space, so
+                // we set heightSoFar by hand for the scroller's range.
                 var y = 4f
+                y = groupRow(tm, FilterState.selectedGroups, base, bg, bright, rowWidth, y)
+                y += 12f
                 y = facetGroup(tm, "TYPE", facetModel.types,
                     FilterState.selectedTypes, base, bg, bright, rowWidth, y, columns = 2)
                 y += 12f
@@ -407,6 +463,46 @@ object PickerController {
     }
 
     /**
+     * Renders the row of custom-group toggle squares (1..[HullmodPrefs.GROUP_COUNT], labelled 1-9
+     * then 0) into the scrollable tooltip-maker. Selection mirrors the facets: plain click selects
+     * ONLY that group, clicking the sole-selected one clears it, and Shift/Ctrl+click toggles a group
+     * in/out -- so selected groups show their union (OR), AND-ed with the other filters. Adding a mod
+     * TO a group is done by hovering it and pressing the matching number key (see the marking
+     * overlay); these squares are filter/display only. Returns the y just past the row.
+     */
+    private fun groupRow(
+        tm: TooltipMakerAPI, selected: MutableSet<Int>,
+        base: Color, bg: Color, bright: Color, rowWidth: Float, startY: Float,
+    ): Float {
+        var y = startY
+        tm.addSectionHeading("CUSTOM GROUPS", base, bg, Alignment.MID, 0f).position.inTL(0f, y)
+        y += 24f
+        val n = HullmodPrefs.GROUP_COUNT
+        val gap = 3f
+        val sq = ((rowWidth - gap * (n - 1)) / n).coerceIn(10f, 28f)
+        val boxes = ArrayList<Pair<Int, ButtonAPI>>(n)
+        for (i in 1..n) {
+            val label = (i % 10).toString()      // 1..9 then 0 for the last group
+            val cb = tm.AreaCheckbox(label, base, bg, bright, sq, sq, font = Font.VICTOR_10, leftAlign = false) {
+                position.inTL((i - 1) * (sq + gap), y)
+            }
+            cb.isChecked = i in selected
+            cb.onClick {
+                if (isMultiSelectKeyDown()) {
+                    if (!selected.add(i)) selected.remove(i)         // toggle membership
+                } else {
+                    val wasSole = selected.size == 1 && i in selected
+                    selected.clear()
+                    if (!wasSole) selected.add(i)                    // exclusive, or clear if re-clicked
+                }
+                boxes.forEach { (g, b) -> b.isChecked = g in selected }
+            }
+            boxes.add(i to cb)
+        }
+        return y + sq
+    }
+
+    /**
      * Renders one multi-select facet group into a (scrollable) tooltip-maker, auto-stacked.
      * Selection model (Windows-folder style): plain click selects ONLY that entry; clicking the
      * sole-selected entry clears the group (= no filter); Shift/Ctrl+click toggles an entry in/out.
@@ -460,6 +556,7 @@ object PickerController {
     private fun legendText(): String =
         "Ctrl+click a mod = blacklist it\n" +
             "Shift+click a mod = favourite it\n" +
+            "Hover a mod, press 1-0 = custom group\n" +
             "Hold  `  = show favourites only\n" +
             "Hold Alt = reveal blacklisted\n" +
             "Shift+click = add to filter selection"

@@ -14,6 +14,11 @@ object HullmodPrefs {
 
     private const val KEY_BLACKLIST = "hullmods_renewed_blacklist"
     private const val KEY_FAVOURITES = "hullmods_renewed_favourites"
+    private const val KEY_GROUP_PREFIX = "hullmods_renewed_group_"
+
+    /** Number of custom (RTS-style) hull-mod groups, addressed 1..[GROUP_COUNT] (number keys 1-9 then
+     *  0 for the last one). */
+    const val GROUP_COUNT = 10
 
     @Suppress("UNCHECKED_CAST")
     private fun set(key: String): MutableSet<String> {
@@ -42,6 +47,24 @@ object HullmodPrefs {
     /** Toggles favourite membership. Returns the new state (true = now a favourite). */
     fun toggleFavourite(id: String): Boolean {
         val s = favourites()
+        return if (s.remove(id)) false else { s.add(id); true }
+    }
+
+    // --- Custom groups (RTS-style 1..GROUP_COUNT) ----------------------------------------------
+
+    /** Mutable set for custom group [index] (1..[GROUP_COUNT]); created in persistent data on first use. */
+    fun group(index: Int): MutableSet<String> = set(KEY_GROUP_PREFIX + index)
+
+    /** Read-only members of custom group [index]; does NOT create the persistent entry (for per-frame reads). */
+    @Suppress("UNCHECKED_CAST")
+    fun groupMembers(index: Int): Set<String> {
+        val sector = Global.getSector() ?: return emptySet()
+        return (sector.persistentData[KEY_GROUP_PREFIX + index] as? Set<String>) ?: emptySet()
+    }
+
+    /** Toggles membership of [id] in custom group [index]. Returns the new state (true = now in the group). */
+    fun toggleGroup(index: Int, id: String): Boolean {
+        val s = group(index)
         return if (s.remove(id)) false else { s.add(id); true }
     }
 }

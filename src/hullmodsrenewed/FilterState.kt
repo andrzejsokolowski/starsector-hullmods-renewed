@@ -19,11 +19,14 @@ object FilterState {
     // Multi-select facets. Empty set = no filter for that group. Within a group: OR. Across groups: AND.
     val selectedDesignTypes: MutableSet<String> = mutableSetOf()   // by manufacturer
     val selectedTypes: MutableSet<String> = mutableSetOf()         // by uiTag
-    // OP range slider lands here next.
+
+    // Active custom-group filters (1..HullmodPrefs.GROUP_COUNT). Empty = no filter; within: OR; AND with the rest.
+    val selectedGroups: MutableSet<Int> = mutableSetOf()
 
     fun clearTransient() {
         searchText = ""
         selectedDesignTypes.clear()
         selectedTypes.clear()
+        selectedGroups.clear()
     }
 }

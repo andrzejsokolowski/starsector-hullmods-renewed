@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.2.0] - 2026-06-23
+
+### Added
+- **Custom groups** — ten RTS-style hull-mod groups. Hover a mod in the list and press a number key
+  **1-9 (or 0 for the tenth)** to toggle it in that group. A new **CUSTOM GROUPS** row of ten
+  numbered square buttons sits above TYPE in the filter panel; clicking a square shows that group
+  (plain click = only that group, Shift/Ctrl+click adds, re-clicking the sole selection clears),
+  matching the TYPE/DESIGN TYPE facets. Membership is stored per-save, and marking a mod into a group
+  keeps the list's scroll position. The legend documents the shortcut.
+
 ## [1.1.2] - 2026-06-23
 
 ### Fixed
