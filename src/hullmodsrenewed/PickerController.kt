@@ -167,7 +167,7 @@ object PickerController {
         // Installing or removing a mod can flip other mods' applicability (mutually-exclusive pairs).
         // When that loadout changes, drop the (now-stale) applicability cache. Empty when not filtering
         // by applicability, so loadout edits don't churn the cache or signature in other modes.
-        val applicabilityFp = installedModsFingerprint(ship)
+        val applicabilityFp = installedModsFingerprint(picker, ship)
         if (applicabilityFp != lastApplicabilityFp) {
             applicableCache.clear()
             lastApplicabilityFp = applicabilityFp
@@ -622,13 +622,15 @@ object PickerController {
         shipDisplay?.invoke("getShip")
     }.getOrNull()
 
-    /** Order-independent fingerprint of the non-built-in mods installed on the ship, or "" if there is
-     *  no ship (i.e. not filtering by applicability). Used to detect a loadout edit that can change
-     *  what's applicable. */
-    private fun installedModsFingerprint(ship: Any?): String {
+    /** Order-independent fingerprint of the non-built-in mods installed on the ship being refitted, or
+     *  "" when not filtering by applicability. Used to detect a loadout edit (install OR remove) that
+     *  can change what's applicable. Reads the live edited variant via the refit panel's
+     *  `getCurrentVariant` -- the ship's own `getVariant()` is a snapshot that does not reflect removals. */
+    private fun installedModsFingerprint(picker: UIPanelAPI, ship: Any?): String {
         if (ship == null) return ""
         return runCatching {
-            val mods = ship.invoke("getVariant")?.invoke("getNonBuiltInHullmods") as? Collection<*>
+            val variant = picker.invoke("getRefitPanel")?.invoke("getShipDisplay")?.invoke("getCurrentVariant")
+            val mods = variant?.invoke("getNonBuiltInHullmods") as? Collection<*>
             mods?.map { it.toString() }?.sorted()?.joinToString(",") ?: ""
         }.getOrNull() ?: ""
     }
