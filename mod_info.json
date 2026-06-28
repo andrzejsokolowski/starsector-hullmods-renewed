@@ -3,7 +3,7 @@
   "name": "Hullmods - Renewed",
   "author": "Oddisz",
   "utility": "true",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Overhauls the refit hull-mod picker with a side filter panel: blacklist mods to hide them, mark favourites, and filter by name, type, design type, and what's applicable to the ship. Works with vanilla and modded hull mods.",
   "gameVersion": "0.98a-RC8",
   "jars": ["jars/HullmodsRenewed.jar"],

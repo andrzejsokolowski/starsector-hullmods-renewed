@@ -73,8 +73,15 @@ object PickerController {
     private var desiredSortColumn: Any? = null
     private var sortResetHandled = false
 
-    /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship change. */
+    /** Cache of "is this hull-mod applicable to the current ship" (id -> applicable); cleared on ship
+     *  change and whenever the installed-mods loadout changes (installing/removing a mod can flip other
+     *  mods' applicability, e.g. mutually-exclusive pairs). */
     private val applicableCache = HashMap<String, Boolean>()
+
+    /** Fingerprint of the mods installed on the ship last frame. A change means applicability may have
+     *  flipped, so we drop the cache and rebuild the table. Only tracked while filtering by
+     *  applicability (empty otherwise), so loadout edits don't force needless rebuilds in other modes. */
+    private var lastApplicabilityFp = ""
 
     /** Last mouse position over the picker (UI space), tracked so a number-key press can mark the
      *  hull-mod currently under the cursor into a custom group. */
@@ -103,6 +110,7 @@ object PickerController {
             injectedPicker = picker
             lastSignature = ""
             applicableCache.clear()
+            lastApplicabilityFp = ""
             searchField = null
             defaultSortColumn = null
             desiredSortColumn = null
@@ -156,6 +164,15 @@ object PickerController {
             lastShip = ship
         }
 
+        // Installing or removing a mod can flip other mods' applicability (mutually-exclusive pairs).
+        // When that loadout changes, drop the (now-stale) applicability cache. Empty when not filtering
+        // by applicability, so loadout edits don't churn the cache or signature in other modes.
+        val applicabilityFp = installedModsFingerprint(ship)
+        if (applicabilityFp != lastApplicabilityFp) {
+            applicableCache.clear()
+            lastApplicabilityFp = applicabilityFp
+        }
+
         searchField?.let { FilterState.searchText = it.text?.trim() ?: "" }
         val query = FilterState.searchText.lowercase()
         val selDesign = FilterState.selectedDesignTypes
@@ -176,8 +193,11 @@ object PickerController {
         // identity is deliberately NOT in the signature: installing a mod rebuilds the preview ship
         // (new object) but it's the same hull, and rebuilding then would reset the list scroll and
         // sort. Vanilla refreshes the table itself on a real ship switch, so we don't need to.
+        // applicabilityFp is included so installing OR removing a mod rebuilds the table while
+        // "applicable only" is on -- otherwise a mod that became applicable again (e.g. after removing
+        // its mutually-exclusive counterpart) would stay filtered out until the next unrelated rebuild.
         val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
-            "${selType.sorted()}|${selGroups.sorted()}|${blacklist.size}|${favourites.size}|$groupTotal"
+            "${selType.sorted()}|${selGroups.sorted()}|${blacklist.size}|${favourites.size}|$groupTotal|$applicabilityFp"
         if (signature != lastSignature) {
             // Keep the (now-hidden) vanilla design-type filter wide open so the rebuild shows the full
             // available list; our left-panel filters below are the only ones that trim it. Rebuild via
@@ -601,6 +621,17 @@ object PickerController {
         val shipDisplay = refitPanel?.invoke("getShipDisplay")
         shipDisplay?.invoke("getShip")
     }.getOrNull()
+
+    /** Order-independent fingerprint of the non-built-in mods installed on the ship, or "" if there is
+     *  no ship (i.e. not filtering by applicability). Used to detect a loadout edit that can change
+     *  what's applicable. */
+    private fun installedModsFingerprint(ship: Any?): String {
+        if (ship == null) return ""
+        return runCatching {
+            val mods = ship.invoke("getVariant")?.invoke("getNonBuiltInHullmods") as? Collection<*>
+            mods?.map { it.toString() }?.sorted()?.joinToString(",") ?: ""
+        }.getOrNull() ?: ""
+    }
 
     /** Uses the dialog's own check (the one that renders rows as "n/a"); cached per picker session. */
     private fun isApplicableToShip(picker: UIPanelAPI, ship: Any, data: Any, id: String): Boolean =

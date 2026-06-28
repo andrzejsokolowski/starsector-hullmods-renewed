@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.2.1] - 2026-06-28
+
+### Fixed
+- Removing a hull-mod from a ship now refreshes the picker list. Previously the table only rebuilt on
+  *installing* a mod, so with "Applicable only" on, removing a mod left its now-applicable
+  mutually-exclusive counterpart hidden until the next unrelated rebuild. The installed-mods loadout is
+  now part of the rebuild signature, so both installing and removing refresh the list (and re-check
+  applicability) while keeping the scroll position.
+
 ## [1.2.0] - 2026-06-23
 
 ### Added
