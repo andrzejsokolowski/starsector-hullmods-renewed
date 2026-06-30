@@ -15,6 +15,7 @@ object HullmodPrefs {
     private const val KEY_BLACKLIST = "hullmods_renewed_blacklist"
     private const val KEY_FAVOURITES = "hullmods_renewed_favourites"
     private const val KEY_GROUP_PREFIX = "hullmods_renewed_group_"
+    private const val KEY_GROUP_NAME_PREFIX = "hullmods_renewed_groupname_"
 
     /** Number of custom (RTS-style) hull-mod groups, addressed 1..[GROUP_COUNT] (number keys 1-9 then
      *  0 for the last one). */
@@ -67,4 +68,22 @@ object HullmodPrefs {
         val s = group(index)
         return if (s.remove(id)) false else { s.add(id); true }
     }
+
+    /** Player-given name for custom group [index], or "" if unnamed. Does NOT create a persistent entry. */
+    fun groupName(index: Int): String {
+        val sector = Global.getSector() ?: return ""
+        return (sector.persistentData[KEY_GROUP_NAME_PREFIX + index] as? String) ?: ""
+    }
+
+    /** Sets (or, when [name] is blank, clears) the name of custom group [index]. */
+    fun setGroupName(index: Int, name: String) {
+        val sector = Global.getSector() ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) sector.persistentData.remove(KEY_GROUP_NAME_PREFIX + index)
+        else sector.persistentData[KEY_GROUP_NAME_PREFIX + index] = trimmed
+    }
+
+    /** A short label for custom group [index]: its name if set, else "Group N" (N = the on-screen digit). */
+    fun groupLabel(index: Int): String =
+        groupName(index).ifBlank { "Group ${index % 10}" }
 }

@@ -1,9 +1,12 @@
 package hullmodsrenewed
 
+import com.fs.starfarer.api.Global
+import com.fs.starfarer.api.graphics.SpriteAPI
 import com.fs.starfarer.api.loading.HullModSpecAPI
 import com.fs.starfarer.api.ui.Alignment
 import com.fs.starfarer.api.ui.ButtonAPI
 import com.fs.starfarer.api.ui.CustomPanelAPI
+import com.fs.starfarer.api.ui.CutStyle
 import com.fs.starfarer.api.ui.TextFieldAPI
 import com.fs.starfarer.api.ui.TooltipMakerAPI
 import com.fs.starfarer.api.ui.UIComponentAPI
@@ -23,7 +26,9 @@ import hullmodsrenewed.uiframework.Text
 import hullmodsrenewed.uiframework.TextField
 import hullmodsrenewed.uiframework.TooltipMakerPanel
 import hullmodsrenewed.uiframework.anchorInTopMiddleOfParent
+import hullmodsrenewed.uiframework.Tooltip
 import hullmodsrenewed.uiframework.bottom
+import hullmodsrenewed.uiframework.centerY
 import hullmodsrenewed.uiframework.drawBorder
 import hullmodsrenewed.uiframework.height
 import hullmodsrenewed.uiframework.left
@@ -105,6 +110,32 @@ object PickerController {
     private var lastHullId: String? = null
     private var lastLoadoutFp = Int.MIN_VALUE
 
+    /** Width of the marker gutter drawn to the left of the mod list (assignment column: trash =
+     *  blacklisted, star = favourite, digits = custom-group membership). Reserved out of the left
+     *  panel's footprint so it sits in the empty strip between the panel and the vanilla table. */
+    private const val MARKER_GUTTER = 46f
+
+    private const val STAR_SPRITE = "graphics/hullmodsrenewed/icon_star.png"
+    private const val TRASH_SPRITE = "graphics/hullmodsrenewed/icon_trash.png"
+
+    private val MARKER_STAR: Color = Misc.getHighlightColor()        // favourite = yellow star
+    private val MARKER_TRASH: Color = Color(235, 90, 90)             // blacklist = red trash
+    private val MARKER_NUM: Color = Misc.getBrightPlayerColor()      // custom-group digits
+
+    /** Lazily-loaded (GL-thread) marker assets: the status icons plus a sprite per digit 0-9 (this API
+     *  build has no LazyFont, so the group numbers are drawn as tintable glyph sprites too). */
+    private var spritesLoaded = false
+    private var starSprite: SpriteAPI? = null
+    private var trashSprite: SpriteAPI? = null
+    private val digitSprites = arrayOfNulls<SpriteAPI>(10)
+
+    /** The open "rename custom group" modal (null = closed), the group it currently edits, and its
+     *  text field. Lives over the picker; while it's up the marking overlay ignores clicks/number keys
+     *  so typing a name doesn't also toggle group membership. */
+    private var renameModal: CustomPanelAPI? = null
+    private var renameGroup = 1
+    private var renameField: TextFieldAPI? = null
+
     fun process(picker: UIPanelAPI) {
         if (picker !== injectedPicker) {
             injectedPicker = picker
@@ -118,6 +149,8 @@ object PickerController {
             lastHullId = null
             lastLoadoutFp = Int.MIN_VALUE
             heldGroupKeys.clear()
+            renameModal = null               // belonged to the previous picker instance; it's gone now
+            renameField = null
             // Filter selections (search + facets + toggles) are deliberately NOT cleared here, so they
             // persist across closing and reopening the picker within a session, matching vanilla. Use
             // "Reset filters" to clear them. (FilterState is a singleton, so the values just stick.)
@@ -296,10 +329,16 @@ object PickerController {
 
     private fun injectMarkingOverlay(picker: UIPanelAPI) {
         val overlay: CustomPanelAPI = picker.CustomPanel(picker.width, picker.height) { plugin ->
+            // The assignment column: small markers in the left gutter showing each row's blacklist /
+            // favourite / custom-group status. Drawn here (not as child widgets) so they clip to the
+            // list viewport and track scrolling.
+            plugin.render { alpha -> runCatching { drawRowMarkers(picker, alpha) } }
+
             // Remember where the cursor is so a number-key press knows which row it is over.
             plugin.onHover { event -> hoverX = event.x.toFloat(); hoverY = event.y.toFloat() }
 
             plugin.onClick { event ->
+                if (renameModal != null) return@onClick   // modal owns input while it's open
                 if (!event.isLMBDownEvent) return@onClick
                 val ctrl = event.isCtrlDown
                 val shift = event.isShiftDown
@@ -315,6 +354,7 @@ object PickerController {
 
             // Hover a mod and press 1..8 to toggle it in that custom group (RTS-style control groups).
             plugin.onKeyDown { event ->
+                if (renameModal != null) return@onKeyDown // modal owns input (incl. digits) while open
                 if (searchField?.hasFocus() == true) return@onKeyDown // typing in the search box, not marking
                 val group = groupKeyToIndex(event.eventValue) ?: return@onKeyDown
                 if (!heldGroupKeys.add(event.eventValue)) return@onKeyDown // ignore key auto-repeat
@@ -342,13 +382,211 @@ object PickerController {
         return if (i >= 0) i + 1 else null
     }
 
+    // --- Assignment marker column --------------------------------------------------------------
+
+    /** Loads the marker sprites (status icons + the ten digit glyphs) once, on the GL thread. */
+    private fun ensureMarkerAssets() {
+        if (spritesLoaded) return
+        spritesLoaded = true
+        fun load(path: String): SpriteAPI? = runCatching {
+            Global.getSettings().loadTexture(path)
+            Global.getSettings().getSprite(path)
+        }.getOrNull()
+        starSprite = load(STAR_SPRITE)
+        trashSprite = load(TRASH_SPRITE)
+        for (d in 0..9) digitSprites[d] = load("graphics/hullmodsrenewed/digit_$d.png")
+    }
+
+    private fun drawSprite(sprite: SpriteAPI?, x: Float, y: Float, w: Float, h: Float, color: Color, alpha: Float) {
+        val s = sprite ?: return
+        s.setSize(w, h)
+        s.color = color
+        s.alphaMult = alpha
+        s.render(x, y)
+    }
+
+    /**
+     * Draws the per-row assignment column in the gutter left of the list: a red trash icon for a
+     * blacklisted mod, a yellow star for a favourite, and the custom-group digits the mod belongs to.
+     * Icons sit on the upper half of the row, group digits on the lower half (or centred when a row
+     * has only one of the two). Rows scrolled out of the list's viewport are culled so nothing draws
+     * over the header or past the bottom edge.
+     */
+    private fun drawRowMarkers(picker: UIPanelAPI, alpha: Float) {
+        val table = findTable(picker) as? UIComponentAPI ?: return
+        val rows = table.invoke("getRows") as? List<*> ?: return
+        if (rows.isEmpty()) return
+
+        ensureMarkerAssets()
+
+        val vTop = table.top
+        val vBottom = table.bottom
+        // Right-align the markers to hug the left edge of the list, so they read as that row's column
+        // rather than floating in the middle of the gutter.
+        val colRight = table.left - 6f
+
+        val blacklist = HullmodPrefs.blacklist()
+        val favourites = HullmodPrefs.favourites()
+        val groupSets = (1..HullmodPrefs.GROUP_COUNT).map { HullmodPrefs.groupMembers(it) }
+
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+
+        val iconSize = 13f
+        val iconGap = 3f
+        val dw = 8f      // digit glyph width
+        val dh = 12f     // digit glyph height
+        val dGap = 1f
+        for (row in rows) {
+            val comp = row as? UIComponentAPI ?: continue
+            val cy = comp.centerY
+            if (cy < vBottom + 6f || cy > vTop - 6f) continue   // outside the list viewport
+
+            val spec = comp.specOrNull() ?: continue
+            val id = spec.id
+
+            val black = id in blacklist
+            val fav = id in favourites
+            val groups = ArrayList<Int>(2)
+            for (gi in 1..HullmodPrefs.GROUP_COUNT) if (id in groupSets[gi - 1]) groups.add(gi % 10)
+            if (!black && !fav && groups.isEmpty()) continue
+
+            val iconCount = (if (black) 1 else 0) + (if (fav) 1 else 0)
+            val twoRows = iconCount > 0 && groups.isNotEmpty()
+
+            // Icons row (right-aligned), on the upper half when there's also a digit row.
+            if (iconCount > 0) {
+                val iconsW = iconCount * iconSize + (iconCount - 1) * iconGap
+                val iconBottom = if (twoRows) cy + 1f else cy - iconSize / 2f
+                var ix = colRight - iconsW
+                if (black) { drawSprite(trashSprite, ix, iconBottom, iconSize, iconSize, MARKER_TRASH, alpha); ix += iconSize + iconGap }
+                if (fav) drawSprite(starSprite, ix, iconBottom, iconSize, iconSize, MARKER_STAR, alpha)
+            }
+
+            // Digits row (right-aligned), on the lower half when there's also an icon row.
+            if (groups.isNotEmpty()) {
+                val digitsW = groups.size * dw + (groups.size - 1) * dGap
+                val digitBottom = if (twoRows) cy - dh - 1f else cy - dh / 2f
+                var dx = colRight - digitsW
+                for (d in groups) {
+                    drawSprite(digitSprites[d], dx, digitBottom, dw, dh, MARKER_NUM, alpha)
+                    dx += dw + dGap
+                }
+            }
+        }
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+    }
+
+    // --- Rename-group modal --------------------------------------------------------------------
+
+    private fun closeRenameModal(picker: UIPanelAPI) {
+        renameModal?.let { runCatching { picker.removeComponent(it) } }
+        renameModal = null
+        renameField = null
+    }
+
+    private fun saveRename(picker: UIPanelAPI) {
+        HullmodPrefs.setGroupName(renameGroup, renameField?.text ?: "")
+        runCatching { playSound("ui_button_pressed") }
+        closeRenameModal(picker)
+        // Rebuild the left panel so the heading + square tooltips pick up the new name immediately.
+        leftPanel?.let { runCatching { picker.removeComponent(it) } }
+        injectLeftPanel(picker)
+    }
+
+    /**
+     * Opens the modal-style overlay for naming custom groups: a dimmed full-screen catcher with a
+     * centred box holding a single-select row of the ten group squares, a text field pre-filled with
+     * the selected group's current name, and Save / Cancel (Enter saves, Esc cancels). Picking a
+     * different square switches which group the field edits. Names are stored per-save in [HullmodPrefs].
+     */
+    private fun openRenameModal(picker: UIPanelAPI) {
+        closeRenameModal(picker)
+        renameGroup = FilterState.selectedGroups.minOrNull() ?: 1
+
+        val base = Misc.getBasePlayerColor()
+        val bg = Misc.getDarkPlayerColor()
+        val bright = Misc.getBrightPlayerColor()
+
+        val mw = 380f
+        val mh = 210f
+        val boxLeft = (picker.width - mw) / 2f
+        val boxTop = (picker.height - mh) / 2f      // distance down from the panel's top edge
+        val pad = 16f
+
+        val squares = ArrayList<Pair<Int, ButtonAPI>>(HullmodPrefs.GROUP_COUNT)
+
+        renameModal = picker.CustomPanel(picker.width, picker.height) { plugin ->
+            plugin.renderBelow { a ->
+                GL11.glColor4f(0f, 0f, 0f, 0.62f * a)                 // dim the screen behind us
+                GL11.glRectf(plugin.left, plugin.bottom, plugin.right, plugin.top)
+                val l = plugin.left + boxLeft
+                val r = l + mw
+                val t = plugin.top - boxTop
+                val b = t - mh
+                GL11.glColor4f(0f, 0f, 0f, 0.95f * a)                 // opaque box
+                GL11.glRectf(l, b, r, t)
+                GL11.glColor4f(0.5f, 0.8f, 1f, a)
+                drawBorder(l, t, r, b)
+            }
+            // Swallow leftover clicks so the picker doesn't treat them as "click outside" and close.
+            plugin.onClick { e -> if (e.isLMBDownEvent) e.consume() }
+            plugin.onKeyDown { e ->
+                when (e.eventValue) {
+                    Keyboard.KEY_RETURN -> saveRename(picker)
+                    Keyboard.KEY_ESCAPE -> { closeRenameModal(picker); e.consume() }
+                }
+            }
+
+            val title = Text("Name custom group ${renameGroup % 10}") {
+                position.inTL(boxLeft + pad, boxTop + pad)
+            }
+
+            val n = HullmodPrefs.GROUP_COUNT
+            val gap = 4f
+            val sq = ((mw - 2f * pad - gap * (n - 1)) / n).coerceIn(12f, 30f)
+            val sqTop = boxTop + pad + 28f
+            for (i in 1..n) {
+                val cb = AreaCheckbox((i % 10).toString(), base, bg, bright, sq, sq, font = Font.VICTOR_10) {
+                    position.inTL(boxLeft + pad + (i - 1) * (sq + gap), sqTop)
+                }
+                cb.isChecked = i == renameGroup
+                cb.onClick {
+                    renameGroup = i
+                    squares.forEach { (g, b) -> b.isChecked = g == renameGroup }
+                    renameField?.text = HullmodPrefs.groupName(i)
+                    title.text = "Name custom group ${i % 10}"
+                }
+                squares.add(i to cb)
+            }
+
+            Text("Name (leave blank to clear)") { position.inTL(boxLeft + pad, sqTop + sq + 10f) }
+            renameField = TextField(mw - 2f * pad, 28f, Font.VICTOR_14) {
+                position.inTL(boxLeft + pad, sqTop + sq + 30f)
+                text = HullmodPrefs.groupName(renameGroup)
+            }
+
+            val btnW = (mw - 2f * pad - 10f) / 2f
+            val btnY = boxTop + mh - pad - 26f
+            Button("Save", bright, bg, width = btnW, height = 26f) {
+                position.inTL(boxLeft + pad, btnY)
+                onClick { saveRename(picker) }
+            }
+            Button("Cancel", base, bg, width = btnW, height = 26f) {
+                position.inTL(boxLeft + pad + btnW + 10f, btnY)
+                onClick { closeRenameModal(picker) }
+            }
+        }.apply { position.inTL(0f, 0f) }
+    }
+
     // --- Left filter column --------------------------------------------------------------------
 
     private fun injectLeftPanel(picker: UIPanelAPI) {
-        // Fill the free zone (the greyed-out ship selector) from a small margin up to the list.
+        // Fill the free zone (the greyed-out ship selector) from a small margin up to the list, leaving
+        // the marker gutter (the assignment column drawn by drawRowMarkers) free between us and the list.
         val tableComp = findTable(picker) as? UIComponentAPI ?: return
         val gap = 10f
-        val rightScreen = tableComp.left - gap
+        val rightScreen = tableComp.left - MARKER_GUTTER - gap
         val w = ((rightScreen - 20f) * 0.75f).coerceAtLeast(160f)
         val leftScreen = rightScreen - w
 
@@ -401,7 +639,7 @@ object PickerController {
             }
 
             // Fixed legend pinned to the bottom so it stays out of the way.
-            val legendH = 128f
+            val legendH = 146f
             TooltipMakerPanel(innerW, legendH) {
                 setParaFontColor(Misc.getGrayColor())
                 addPara(legendText(), 2f)
@@ -426,6 +664,13 @@ object PickerController {
                 // we set heightSoFar by hand for the scroller's range.
                 var y = 4f
                 y = groupRow(tm, FilterState.selectedGroups, base, bg, bright, rowWidth, y)
+                y += 4f
+                tm.setButtonFontVictor10()
+                val renameBtn = tm.addButton("Name groups…", null, base, bg,
+                    Alignment.MID, CutStyle.TL_BR, rowWidth, 18f, 0f)
+                renameBtn.position.inTL(0f, y)
+                renameBtn.onClick { openRenameModal(picker) }
+                y += 22f
                 y += 12f
                 y = facetGroup(tm, "TYPE", facetModel.types,
                     FilterState.selectedTypes, base, bg, bright, rowWidth, y, columns = 2)
@@ -495,7 +740,10 @@ object PickerController {
         base: Color, bg: Color, bright: Color, rowWidth: Float, startY: Float,
     ): Float {
         var y = startY
-        tm.addSectionHeading("CUSTOM GROUPS", base, bg, Alignment.MID, 0f).position.inTL(0f, y)
+        // Heading shows the active group's name when exactly one is selected, else the generic title.
+        val heading = if (selected.size == 1) HullmodPrefs.groupLabel(selected.first()).uppercase()
+        else "CUSTOM GROUPS"
+        tm.addSectionHeading(heading, base, bg, Alignment.MID, 0f).position.inTL(0f, y)
         y += 24f
         val n = HullmodPrefs.GROUP_COUNT
         val gap = 3f
@@ -505,6 +753,16 @@ object PickerController {
             val label = (i % 10).toString()      // 1..9 then 0 for the last group
             val cb = tm.AreaCheckbox(label, base, bg, bright, sq, sq, font = Font.VICTOR_10, leftAlign = false) {
                 position.inTL((i - 1) * (sq + gap), y)
+            }
+            // Hover tooltip naming the group (and its size), so you can recall what's inside it.
+            (cb as UIComponentAPI).Tooltip(TooltipMakerAPI.TooltipLocation.ABOVE, 220f) {
+                val members = HullmodPrefs.groupMembers(i).size
+                setParaFontColor(bright)
+                addPara(HullmodPrefs.groupLabel(i), 0f)
+                setParaFontColor(base)
+                addPara(if (members == 1) "1 hull-mod" else "$members hull-mods", 4f)
+                setParaFontColor(Misc.getGrayColor())
+                addPara("Hover a mod in the list, press ${i % 10} to add/remove it here.", 6f)
             }
             cb.isChecked = i in selected
             cb.onClick {
@@ -577,6 +835,7 @@ object PickerController {
         "Ctrl+click a mod = blacklist it\n" +
             "Shift+click a mod = favourite it\n" +
             "Hover a mod, press 1-0 = custom group\n" +
+            "Left column: trash=blacklist, star=favourite, #=groups\n" +
             "Hold  `  = show favourites only\n" +
             "Hold Alt = reveal blacklisted\n" +
             "Shift+click = add to filter selection"

@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.3.1] - 2026-06-30
+
+### Changed
+- The assignment marker column is now right-aligned to hug the left edge of the mod list (instead of
+  floating mid-gutter), so each row's trash/star/group markers read as that row's column. Icons and
+  group digits are slightly larger for legibility.
+
+## [1.3.0] - 2026-06-30
+
+### Added
+- **Custom-group names** — name any of the ten custom groups so you remember what's in them. A
+  **Name groups…** button under the CUSTOM GROUPS squares opens a small modal (pick a group, type a
+  name, Save / Cancel; Enter saves, Esc cancels). Names show as a hover tooltip on each square (with
+  the group's size and shortcut key) and in the CUSTOM GROUPS heading when a single group is selected.
+  Names are stored per-save.
+- **Assignment marker column** — a new gutter to the left of the mod list shows, per row, where a
+  hull-mod is assigned: a red trash icon if blacklisted, a yellow star if favourited, and the digits
+  of every custom group it belongs to. Markers track scrolling and are clipped to the list.
+
 ## [1.2.1] - 2026-06-28
 
 ### Fixed
