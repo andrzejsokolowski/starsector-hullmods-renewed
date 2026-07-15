@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.4.0] - 2026-07-15
+
+### Added
+- **Build in resets filters** — clicking the vanilla **Build in** toggle now clears the active
+  filters, so leftover search/facet criteria no longer leave the build-in list empty.
+- **Auto-unfocus the search box on hover** — moving the mouse onto a different mod releases the
+  search field's focus, so that mod's description preview appears without a manual click elsewhere.
+  A cursor resting over a row while you type keeps the field focused.
+- **Search box clears on focus** — clicking into the search field clears it, so a new search
+  starts fresh without backspacing the previous text.
+
 ## [1.3.1] - 2026-06-30
 
 ### Changed

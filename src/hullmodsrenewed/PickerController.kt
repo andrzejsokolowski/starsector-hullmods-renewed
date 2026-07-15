@@ -136,6 +136,20 @@ object PickerController {
     private var renameGroup = 1
     private var renameField: TextFieldAPI? = null
 
+    /** Last perm/build-in mode state of the picker, so we can edge-detect the vanilla "Build in"
+     *  toggle being turned on and reset the filters then -- otherwise leftover search/facet criteria
+     *  can leave the build-in list empty. */
+    private var lastPermMode = false
+
+    /** The picker row the cursor was last over. We only auto-release the search field's focus once the
+     *  mouse actually moves onto a *different* mod, so its description preview (suppressed while the
+     *  field has focus) appears without a manual click elsewhere. */
+    private var lastHoverRow: Any? = null
+
+    /** Whether the search field had keyboard focus last frame, to edge-detect a fresh click into it
+     *  and clear the box then (so a new search doesn't require backspacing the old text). */
+    private var searchHadFocus = false
+
     fun process(picker: UIPanelAPI) {
         if (picker !== injectedPicker) {
             injectedPicker = picker
@@ -151,6 +165,11 @@ object PickerController {
             heldGroupKeys.clear()
             renameModal = null               // belonged to the previous picker instance; it's gone now
             renameField = null
+            lastHoverRow = null
+            searchHadFocus = false
+            // Seed from the picker's current mode so simply reopening the dialog never counts as a
+            // build-in toggle; only a later false->true flip (the "Build in" button) triggers a reset.
+            lastPermMode = runCatching { picker.invoke("isPermMode") as? Boolean }.getOrNull() ?: false
             // Filter selections (search + facets + toggles) are deliberately NOT cleared here, so they
             // persist across closing and reopening the picker within a session, matching vanilla. Use
             // "Reset filters" to clear them. (FilterState is a singleton, so the values just stick.)
@@ -166,6 +185,14 @@ object PickerController {
     // --- Filtering -----------------------------------------------------------------------------
 
     private fun applyFilter(picker: UIPanelAPI) {
+        // The vanilla "Build in" toggle just being turned on switches the list to build-in candidates;
+        // any leftover search/facet filters can hide them all, leaving an empty screen. Reset the
+        // filters on that transition (same as clicking "Reset filters" by hand). Edge-triggered, so
+        // it never fights the player refining filters *within* build-in mode afterwards.
+        val permMode = runCatching { picker.invoke("isPermMode") as? Boolean }.getOrNull() ?: false
+        if (permMode && !lastPermMode) resetFilters(picker)
+        lastPermMode = permMode
+
         val table = findTable(picker) ?: return
 
         // Remember the player's chosen sort so we can restore it after a rebuild (installing a mod
@@ -206,7 +233,15 @@ object PickerController {
             lastApplicabilityFp = applicabilityFp
         }
 
-        searchField?.let { FilterState.searchText = it.text?.trim() ?: "" }
+        searchField?.let { sf ->
+            // Clear the box each time it gains focus, so a fresh click starts a new search without
+            // having to backspace the old text. Edge-triggered on focus so it doesn't wipe what
+            // you're actively typing.
+            val focused = sf.hasFocus()
+            if (focused && !searchHadFocus) runCatching { sf.text = "" }
+            searchHadFocus = focused
+            FilterState.searchText = sf.text?.trim() ?: ""
+        }
         val query = FilterState.searchText.lowercase()
         val selDesign = FilterState.selectedDesignTypes
         val selType = FilterState.selectedTypes
@@ -334,8 +369,23 @@ object PickerController {
             // list viewport and track scrolling.
             plugin.render { alpha -> runCatching { drawRowMarkers(picker, alpha) } }
 
-            // Remember where the cursor is so a number-key press knows which row it is over.
-            plugin.onHover { event -> hoverX = event.x.toFloat(); hoverY = event.y.toFloat() }
+            // Remember where the cursor is so a number-key press knows which row it is over, and
+            // auto-release the search field once the mouse moves onto a *different* mod: the vanilla
+            // description preview stays blank while the field has focus, so this lets it appear
+            // without the player having to click elsewhere first. Only a move to a new row triggers
+            // it, so a resting cursor over a row while typing keeps the field focused.
+            plugin.onHover { event ->
+                hoverX = event.x.toFloat(); hoverY = event.y.toFloat()
+                val row = rowUnderCursor(picker, hoverX, hoverY)
+                if (row != null && row !== lastHoverRow && searchField?.hasFocus() == true) {
+                    // NB: TextFieldAPI.grabFocus(false) does NOT unfocus -- both overloads *grab*
+                    // focus (the boolean only toggles a sound). The impl's releaseFocus(listener)
+                    // clears keyboard focus via the global focus manager; passing null skips the
+                    // listener callback and just releases, mirroring a click elsewhere.
+                    runCatching { searchField?.invoke("releaseFocus", null) }
+                }
+                lastHoverRow = row
+            }
 
             plugin.onClick { event ->
                 if (renameModal != null) return@onClick   // modal owns input while it's open
