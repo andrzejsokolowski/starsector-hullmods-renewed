@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.5.0] - 2026-07-26
+
+### Added
+- **Also search descriptions** — a toggle under the search box that widens the search to each
+  hull-mod's description text, not just its name/design type. Handy when modded mods have obscure
+  names: type "beam" to surface every mod whose description mentions beams. Cleared by "Reset
+  filters".
+
 ## [1.4.0] - 2026-07-15
 
 ### Added

@@ -264,7 +264,7 @@ object PickerController {
         // applicabilityFp is included so installing OR removing a mod rebuilds the table while
         // "applicable only" is on -- otherwise a mod that became applicable again (e.g. after removing
         // its mutually-exclusive counterpart) would stay filtered out until the next unrelated rebuild.
-        val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${selDesign.sorted()}|" +
+        val signature = "$favOnly|$showBlacklisted|$applicableOnly|$query|${FilterState.searchDescriptions}|${selDesign.sorted()}|" +
             "${selType.sorted()}|${selGroups.sorted()}|${blacklist.size}|${favourites.size}|$groupTotal|$applicabilityFp"
         if (signature != lastSignature) {
             // Keep the (now-hidden) vanilla design-type filter wide open so the rebuild shows the full
@@ -353,6 +353,7 @@ object PickerController {
         FilterState.favouritesOnly = false
         FilterState.showBlacklisted = false
         FilterState.applicableOnly = true
+        FilterState.searchDescriptions = false
         FilterState.clearTransient()             // search text + facet selections
         lastSignature = ""                       // force a table rebuild on the next frame
         leftPanel?.let { runCatching { picker.removeComponent(it) } }
@@ -667,24 +668,30 @@ object PickerController {
                 text = FilterState.searchText
             }
 
+            AreaCheckbox("Also search descriptions", base, bg, bright, innerW, 28f, leftAlign = true) {
+                position.inTL(pad, 88f)
+                isChecked = FilterState.searchDescriptions
+                onClick { FilterState.searchDescriptions = isChecked }
+            }
+
             AreaCheckbox("Favourites only", base, bg, bright, innerW, 28f, leftAlign = true) {
-                position.inTL(pad, 90f)
+                position.inTL(pad, 120f)
                 isChecked = FilterState.favouritesOnly
                 onClick { FilterState.favouritesOnly = isChecked }
             }
             AreaCheckbox("Show blacklisted", base, bg, bright, innerW, 28f, leftAlign = true) {
-                position.inTL(pad, 122f)
+                position.inTL(pad, 152f)
                 isChecked = FilterState.showBlacklisted
                 onClick { FilterState.showBlacklisted = isChecked }
             }
             AreaCheckbox("Applicable only", base, bg, bright, innerW, 28f, leftAlign = true) {
-                position.inTL(pad, 154f)
+                position.inTL(pad, 184f)
                 isChecked = FilterState.applicableOnly
                 onClick { FilterState.applicableOnly = isChecked }
             }
 
             Button("Reset filters", bright, bg, width = innerW, height = 24f) {
-                position.inTL(pad, 190f)
+                position.inTL(pad, 220f)
                 onClick { resetFilters(picker) }
             }
 
@@ -699,7 +706,7 @@ object PickerController {
             // gets the mouse wheel routed to it by the engine (the dialog grabs it), so we drive it
             // ourselves: capture scroll events on the container's plugin and move the scroller's
             // yOffset. The scroller still clips its content to the viewport for us.
-            val facetTop = 222f
+            val facetTop = 252f
             val facetH = (picker.height - facetTop - (legendH + 18f)).coerceAtLeast(140f)
             val facetBox = CustomPanel(innerW, facetH) { fcPlugin ->
                 val rowWidth = innerW - 26f
@@ -950,11 +957,19 @@ object PickerController {
             runCatching { picker.invoke("isApplicable", data, ship) as? Boolean }.getOrNull() ?: true
         }
 
-    /** Case-insensitive substring match on the hull-mod name and its design type (manufacturer). */
+    /** Case-insensitive substring match on the hull-mod name and its design type (manufacturer), plus
+     *  its description text when [FilterState.searchDescriptions] is on (so e.g. "beam" finds every mod
+     *  whose description mentions beams, not just those with "beam" in the name). */
     private fun matchesSearch(spec: HullModSpecAPI, queryLower: String): Boolean {
         val name = spec.displayName?.lowercase() ?: ""
+        if (name.contains(queryLower)) return true
         val manufacturer = spec.manufacturer?.lowercase() ?: ""
-        return name.contains(queryLower) || manufacturer.contains(queryLower)
+        if (manufacturer.contains(queryLower)) return true
+        if (FilterState.searchDescriptions) {
+            val desc = runCatching { spec.descriptionFormat }.getOrNull()?.lowercase() ?: ""
+            if (desc.contains(queryLower)) return true
+        }
+        return false
     }
 
     private fun designTypeOf(spec: HullModSpecAPI): String =

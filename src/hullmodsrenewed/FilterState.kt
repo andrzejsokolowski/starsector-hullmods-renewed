@@ -15,6 +15,7 @@ object FilterState {
     var showBlacklisted = false
     var applicableOnly = true   // default ON: hide mods that can never go on this ship (e.g. carrier mod on a no-bay hull)
     var searchText = ""         // substring filter on hull-mod name + design type
+    var searchDescriptions = false  // when on, the search also matches the hull-mod's description text
 
     // Multi-select facets. Empty set = no filter for that group. Within a group: OR. Across groups: AND.
     val selectedDesignTypes: MutableSet<String> = mutableSetOf()   // by manufacturer
