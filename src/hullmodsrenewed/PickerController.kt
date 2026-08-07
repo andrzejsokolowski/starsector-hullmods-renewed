@@ -802,10 +802,10 @@ object PickerController {
         base: Color, bg: Color, bright: Color, rowWidth: Float, startY: Float,
     ): Float {
         var y = startY
-        // Heading shows the active group's name when exactly one is selected, else the generic title.
-        val heading = if (selected.size == 1) HullmodPrefs.groupLabel(selected.first()).uppercase()
-        else "CUSTOM GROUPS"
-        tm.addSectionHeading(heading, base, bg, Alignment.MID, 0f).position.inTL(0f, y)
+        // Kept so the click handlers below can retitle it -- the heading is built once with the
+        // panel, so without this it would freeze on whatever was selected at build time.
+        val headingLabel = tm.addSectionHeading(groupHeading(selected), base, bg, Alignment.MID, 0f)
+        headingLabel.position.inTL(0f, y)
         y += 24f
         val n = HullmodPrefs.GROUP_COUNT
         val gap = 3f
@@ -841,10 +841,19 @@ object PickerController {
                     if (!wasSole) selected.add(i)                    // exclusive, or clear if re-clicked
                 }
                 boxes.forEach { (g, b) -> b.isChecked = g in selected }
+                headingLabel.text = groupHeading(selected)
             }
             boxes.add(i to cb)
         }
         return y + sq
+    }
+
+    /** Title over the custom-group squares: the group's own name when exactly one is selected, a
+     *  generic label when several are, and the section's name when no group filter is active. */
+    private fun groupHeading(selected: Set<Int>): String = when (selected.size) {
+        0 -> "CUSTOM GROUPS"
+        1 -> HullmodPrefs.groupLabel(selected.first()).uppercase()
+        else -> "MULTIPLE GROUPS"
     }
 
     /**

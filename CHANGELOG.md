@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.6.1] - 2026-08-07
+
+### Fixed
+- The heading above the custom-group squares no longer sticks on the group that happened to be
+  selected when the panel was built. It was created once and never retitled, so after renaming a
+  group its name stayed up there while you clicked through the other squares. It now follows the
+  selection, and reads **MULTIPLE GROUPS** when more than one is selected.
+
 ## [1.6.0] - 2026-08-07
 
 ### Added
