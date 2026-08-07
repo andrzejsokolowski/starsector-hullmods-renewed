@@ -7,8 +7,12 @@ package hullmodsrenewed
  *
  * Survives picker re-opens within a session (it's an object), so all your filter choices -- toggles,
  * search text, and facet selections -- stick as you close/reopen the picker and refit different ships
- * (use "Reset filters" to clear them). Blacklist/favourite *membership* lives per-save in
+ * (use "Reset filters" to clear them). Blacklist/favourite *membership* lives per-installation in
  * [HullmodPrefs]; this is just which filters are active.
+ *
+ * The four toggles start at, and "Reset filters" returns to, the defaults configured in LunaSettings
+ * (see [HmrSettings] and [applyDefaults]). The field initialisers below are only the fallback for
+ * when those settings can't be read.
  */
 object FilterState {
     var favouritesOnly = false
@@ -29,5 +33,13 @@ object FilterState {
         selectedDesignTypes.clear()
         selectedTypes.clear()
         selectedGroups.clear()
+    }
+
+    /** Puts the four persistent toggles back to the LunaSettings-configured defaults. */
+    fun applyDefaults() {
+        favouritesOnly = HmrSettings.defaultFavouritesOnly
+        showBlacklisted = HmrSettings.defaultShowBlacklisted
+        applicableOnly = HmrSettings.defaultApplicableOnly
+        searchDescriptions = HmrSettings.defaultSearchDescriptions
     }
 }

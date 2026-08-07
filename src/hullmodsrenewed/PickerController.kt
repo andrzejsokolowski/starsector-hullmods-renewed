@@ -350,10 +350,7 @@ object PickerController {
     }
 
     private fun resetFilters(picker: UIPanelAPI) {
-        FilterState.favouritesOnly = false
-        FilterState.showBlacklisted = false
-        FilterState.applicableOnly = true
-        FilterState.searchDescriptions = false
+        FilterState.applyDefaults()              // toggles, per the LunaSettings defaults
         FilterState.clearTransient()             // search text + facet selections
         lastSignature = ""                       // force a table rebuild on the next frame
         leftPanel?.let { runCatching { picker.removeComponent(it) } }
@@ -549,7 +546,8 @@ object PickerController {
      * Opens the modal-style overlay for naming custom groups: a dimmed full-screen catcher with a
      * centred box holding a single-select row of the ten group squares, a text field pre-filled with
      * the selected group's current name, and Save / Cancel (Enter saves, Esc cancels). Picking a
-     * different square switches which group the field edits. Names are stored per-save in [HullmodPrefs].
+     * different square switches which group the field edits. Names are stored per-installation in
+     * [HullmodPrefs].
      */
     private fun openRenameModal(picker: UIPanelAPI) {
         closeRenameModal(picker)
@@ -577,7 +575,7 @@ object PickerController {
                 val b = t - mh
                 GL11.glColor4f(0f, 0f, 0f, 0.95f * a)                 // opaque box
                 GL11.glRectf(l, b, r, t)
-                GL11.glColor4f(0.5f, 0.8f, 1f, a)
+                glBorderColor(a)
                 drawBorder(l, t, r, b)
             }
             // Swallow leftover clicks so the picker doesn't treat them as "click outside" and close.
@@ -649,9 +647,9 @@ object PickerController {
 
         leftPanel = picker.CustomPanel(w, picker.height) { plugin ->
             plugin.renderBelow { alpha ->
-                GL11.glColor4f(0f, 0f, 0f, 0.55f * alpha)
+                GL11.glColor4f(0f, 0f, 0f, HmrSettings.panelOpacity * alpha)
                 GL11.glRectf(plugin.left, plugin.bottom, plugin.right, plugin.top)
-                GL11.glColor4f(0.5f, 0.8f, 1f, alpha)
+                glBorderColor(alpha)
                 drawBorder(plugin.left, plugin.top, plugin.right, plugin.bottom)
             }
             // Swallow clicks that land on our panel so the vanilla picker doesn't treat them as a
@@ -758,6 +756,13 @@ object PickerController {
         }
     }
 
+    /** Sets the GL colour to the player's configured outline colour (LunaSettings), at [alpha].
+     *  Read per frame so a colour change in the settings menu shows up without reopening the picker. */
+    private fun glBorderColor(alpha: Float) {
+        val c = HmrSettings.borderColor
+        GL11.glColor4f(c.red / 255f, c.green / 255f, c.blue / 255f, alpha)
+    }
+
     private fun hitTest(row: Any, x: Float, y: Float): Boolean {
         val comp = row as? UIComponentAPI ?: return false
         return x in comp.left..comp.right && y in comp.bottom..comp.top
@@ -813,12 +818,17 @@ object PickerController {
             }
             // Hover tooltip naming the group (and its size), so you can recall what's inside it.
             (cb as UIComponentAPI).Tooltip(TooltipMakerAPI.TooltipLocation.ABOVE, 220f) {
-                val members = HullmodPrefs.groupMembers(i).size
+                val ids = HullmodPrefs.groupMembers(i)
+                val members = ids.size
                 setParaFontColor(bright)
                 addPara(HullmodPrefs.groupLabel(i), 0f)
                 setParaFontColor(base)
                 addPara(if (members == 1) "1 hull-mod" else "$members hull-mods", 4f)
                 setParaFontColor(Misc.getGrayColor())
+                // Marks are kept for hull-mods that aren't loaded right now (a disabled mod), so say
+                // so rather than letting the count look wrong against what the list can show.
+                val unknown = HullmodPrefs.unknownIdCount(ids)
+                if (unknown > 0) addPara("$unknown from mods that aren't loaded right now.", 4f)
                 addPara("Hover a mod in the list, press ${i % 10} to add/remove it here.", 6f)
             }
             cb.isChecked = i in selected

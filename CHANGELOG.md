@@ -5,6 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the
 project uses [Semantic Versioning](https://semver.org/) (fix = patch, feature =
 minor, release = major).
 
+## [1.6.0] - 2026-08-07
+
+### Added
+- **Preferences are now saved per installation.** Favourites, hidden (blacklisted) hull-mods, custom
+  group membership and custom group names live in `saves/common/hullmods_renewed/preferences.json`
+  instead of inside the campaign save, so a set of marks built up in one playthrough is already there
+  in the next one. Existing saves are migrated automatically on first load: their marks are merged
+  into the shared file (the save's own copy is left untouched, so downgrading still works).
+- **LunaSettings page** with three tabs:
+  - *Filters* — pick what each of the four toggles ("Applicable only", "Favourites only",
+    "Show hidden", "Also search descriptions") starts at and what **Reset filters** returns to.
+    Changing one applies to the open picker immediately, leaving your other filters alone.
+  - *Appearance* — **outline colour** for the filter panel and the "Name groups" window, plus the
+    panel's **background opacity**. Both are read per frame, so edits show up right away.
+  - *Preferences* — **Wipe saved preferences**, a one-shot toggle that clears every favourite, hidden
+    mod, custom group and group name, then turns itself back off.
+
+### Changed
+- Custom-group tooltips now call out how many members belong to hull-mods that aren't loaded right
+  now (a disabled mod), so the count no longer looks wrong against what the list can show.
+
+### Fixed
+- Marks for hull-mods the player hasn't learned yet — or that come from a mod which is currently
+  disabled — are stored and reloaded verbatim and never resolved against the loaded spec list, so
+  they can't fail a load and come back intact once those mods are available again.
+
 ## [1.5.0] - 2026-07-26
 
 ### Added

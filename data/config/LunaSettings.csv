@@ -1,0 +1,15 @@
+fieldID,fieldName,fieldType,defaultValue,secondaryValue,fieldDescription,minValue,maxValue,tab
+hmr_header_defaults,Defaults Header,Header,Default filter state,,,,,Filters
+hmr_defaults_text,Defaults Text,Text,"These decide what the filter panel's toggles start at, and what [Reset filters] puts them back to. Changing one here applies it to the open picker right away; your other filters are left alone.",,,,,Filters
+hmr_default_applicable_only,Applicable only - on by default,Boolean,true,,"Hides hull-mods that can never go on the ship being refitted (a carrier mod on a hull with no bays). Turn this off if you would rather always see the full list.",,,Filters
+hmr_default_favourites_only,Favourites only - on by default,Boolean,false,,"Starts the picker showing only the hull-mods you have favourited. Holding [`] (backtick) does this momentarily regardless of the setting.",,,Filters
+hmr_default_show_blacklisted,Show hidden - on by default,Boolean,false,,"Starts the picker with hidden (blacklisted) hull-mods revealed instead of filtered out. Holding [Alt] does this momentarily regardless of the setting.",,,Filters
+hmr_default_search_descriptions,Also search descriptions - on by default,Boolean,false,,"Widens the search box to match each hull-mod's description text, not just its name and design type.",,,Filters
+,,,,,,,,
+hmr_header_appearance,Appearance Header,Header,Filter panel,,,,,Appearance
+hmr_border_color,Outline colour,Color,#80ccff,,"Colour of the outline drawn around the filter panel and the [Name groups] window. The default matches the panel's original light blue.",,,Appearance
+hmr_panel_opacity,Background opacity,Double,0.55,,"How solid the filter panel's black background is. [0] is fully transparent, [1] is fully opaque.",0,1,Appearance
+,,,,,,,,
+hmr_header_prefs,Preferences Header,Header,Saved preferences,,,,,Preferences
+hmr_prefs_text,Preferences Text,Text,"Your favourites, hidden hull-mods, custom-group membership and group names are stored once per installation, in [saves/common/hullmods_renewed/], so they carry over to every playthrough. Marks for hull-mods you have not learned yet - or that belong to a mod you have disabled - are kept as-is and start working again as soon as those mods show up.",,,,,Preferences
+hmr_wipe_prefs,Wipe saved preferences,Boolean,false,,"Turn this on and press [Apply] to erase everything above - all favourites, hidden hull-mods, custom groups and group names - and start from an empty slate. This cannot be undone. The toggle resets itself to off once the wipe has run, so it will read as off again the next time you open this menu.",,,Preferences

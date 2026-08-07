@@ -10,6 +10,27 @@ hundreds of hull mods that pile up in a heavily-modded game.
 
 Works with vanilla and modded hull mods alike.
 
+## Preferences
+
+Favourites, hidden hull mods, custom-group membership and custom-group names are stored **once per
+installation**, in `saves/common/hullmods_renewed/preferences.json` — set your picker up once and
+every later playthrough starts with it. Saves made before 1.6.0 keep their own copy and are merged
+into the shared file the first time they are loaded.
+
+Marks are kept as plain hull-mod ids and are never checked against the loaded mod list, so a mod you
+haven't unlocked yet — or one you've temporarily disabled — keeps its marks and picks them straight
+back up.
+
+## Settings
+
+Configurable through LunaLib's settings menu (`Shift+F2` in the campaign):
+
+- **Filters** — the starting state of each filter toggle, which is also what **Reset filters** goes
+  back to.
+- **Appearance** — the filter panel's outline colour and background opacity.
+- **Preferences** — **Wipe saved preferences**, a one-shot toggle that clears everything above and
+  then turns itself back off.
+
 ## Status
 
 1.0.0 Released. Works and tested.
