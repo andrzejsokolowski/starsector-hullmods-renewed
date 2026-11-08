@@ -1,0 +1,33 @@
+Version 1.6.1 (2026-08-07)
+- Fixed custom group names not showing on the banner correctly.
+
+Version 1.6.0
+- Preferences are saved per installation, so they carry over between saves.
+
+Version 1.5.0 (2026-07-26)
+- The search bar also searches descriptions and manufacturers.
+
+Version 1.4.1 (2026-07-15)
+- Search bar improvements.
+
+Version 1.3.1 (2026-06-22)
+- Full release: works with over 490 hull mods with no performance loss.
+- Custom groups can be named. Icons for favourite, blacklist and custom groups.
+
+Version 1.2.1
+- Fixed removing a hull mod not refreshing the applicable mods.
+
+Version 1.2.0
+- Custom groups 1-10: hover a hull mod and press 1-9 (0 for the tenth group) to add it.
+
+Version 1.1.2
+- Every action returns the scroll bar to where it was.
+
+Version 1.0.3
+- Fixed the list scrolling back to the top.
+
+Version 1.0.2
+- Version checker and direct download fixes.
+
+Version 1.0.1
+- Fixed sorting on the vanilla columns (OP up/down) when applying a hull mod.

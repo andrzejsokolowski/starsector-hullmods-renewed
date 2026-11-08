@@ -1,5 +1,6 @@
 {
     "masterVersionFile":"https://raw.githubusercontent.com/andrzejsokolowski/starsector-hullmods-renewed/main/hullmods_renewed.version",
+    "changelogURL":"https://raw.githubusercontent.com/andrzejsokolowski/starsector-hullmods-renewed/main/changelog.txt",
     "modName":"Hullmods - Renewed",
     "modThreadId":35619,
     "modVersion":
