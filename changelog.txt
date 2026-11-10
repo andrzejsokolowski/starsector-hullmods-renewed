@@ -1,3 +1,6 @@
+Version 1.6.2 (2026-11-10)
+- New gold icon in mod managers (TriOS) and in LunaLib's settings.
+
 Version 1.6.1 (2026-08-07)
 - Fixed custom group names not showing on the banner correctly.
 
