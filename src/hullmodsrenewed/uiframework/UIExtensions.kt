@@ -269,8 +269,8 @@ internal fun UIPanelAPI.clearChildren() {
 // Abstract base class for Boxed vanilla elements to fix vanilla jank / things with no API's (like images)
 abstract class BoxedUIElement(val boxedElement: UIComponentAPI)
 
-class BoxedUILabel(val uiLabel: LabelAPI): BoxedUIElement(uiLabel as UIComponentAPI),
-    UIComponentAPI by (uiLabel as UIComponentAPI), LabelAPI by uiLabel {
+class BoxedUILabel(val uiLabel: LabelAPI): BoxedUIElement(uiLabel),
+    LabelAPI by uiLabel {  // LabelAPI extends UIComponentAPI since Starsector 0.98.5a
     override fun advance(amount: Float) { uiLabel.advance(amount) }
     override fun getOpacity() = uiLabel.opacity
     override fun setOpacity(opacity: Float) { uiLabel.opacity = opacity }

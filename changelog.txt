@@ -1,3 +1,7 @@
+Version 1.7.0 (2026-11-15)
+- Updated for Starsector 0.98.5a.
+- The new d-mod repair screen is left as vanilla, so a hidden or filtered d-mod can never be missing from it.
+
 Version 1.6.2 (2026-11-10)
 - New gold icon in mod managers (TriOS) and in LunaLib's settings.
 

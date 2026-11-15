@@ -6,9 +6,9 @@
     "modVersion":
     {
         "major":1,
-        "minor":6,
-        "patch":"2"
+        "minor":7,
+        "patch":"0"
     },
-    "starsectorVersion":"0.98a-RC8",
+    "starsectorVersion":"0.98.5a-RC4",
     "directDownloadURL":"https://github.com/andrzejsokolowski/starsector-hullmods-renewed/releases/latest/download/Hullmods-Renewed.zip"
 }

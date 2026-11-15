@@ -39,6 +39,9 @@ class RefitPickerInjector : EveryFrameScript {
             ?: return
 
         val picker = findDescendant(core) { it.hasMethod(MARKER_METHOD) } as? UIPanelAPI ?: return
+        // Starsector 0.98.5a reuses this picker to repair d-mods. Leave that mode as vanilla so a
+        // blacklisted or filtered-out d-mod can never be hidden from the player.
+        if (runCatching { picker.invoke("isRepairDmodsMode") as? Boolean }.getOrNull() == true) return
         PickerController.process(picker)
     }
 
